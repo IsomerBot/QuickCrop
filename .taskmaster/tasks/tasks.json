@@ -1,0 +1,528 @@
+{
+  "master": {
+    "tasks": [
+      {
+        "id": 1,
+        "title": "Project Foundation & Environment Setup",
+        "description": "Set up project structure and development environment",
+        "status": "done",
+        "priority": "high",
+        "dependencies": [],
+        "details": "Create root project directory structure (/backend, /frontend, /docker, /docs), initialize Git repository with .gitignore for Python and Node.js, set up development environment requirements (Python 3.11, Node.js 18+), create basic documentation structure following PRD specifications, set up development Docker Compose for local testing",
+        "testStrategy": "Verify all directories exist, environment can be set up, and basic Docker compose runs without errors",
+        "subtasks": []
+      },
+      {
+        "id": 2,
+        "title": "Backend Core Development (FastAPI)",
+        "description": "Initialize backend FastAPI application with basic structure",
+        "status": "done",
+        "priority": "high",
+        "dependencies": [
+          "1"
+        ],
+        "details": "Create FastAPI application with proper project structure, set up configuration management using environment variables, implement basic middleware for CORS, request ID generation, and logging, create data models using Pydantic for API contracts, set up directory structure: /api, /core, /models, /services, /utils",
+        "testStrategy": "Unit tests for configuration loading, middleware functionality, and basic API response structure",
+        "subtasks": []
+      },
+      {
+        "id": 3,
+        "title": "Computer Vision & Detection Pipeline",
+        "description": "Implement MediaPipe face and pose detection pipeline",
+        "status": "done",
+        "priority": "high",
+        "dependencies": [
+          "2"
+        ],
+        "details": "Integrate MediaPipe Face Detection (BlazeFace) for face bounding boxes, implement MediaPipe Pose detection for torso/shoulder keypoint estimation, create fallback center-crop logic when detection fails, build detection result validation and error handling, optimize detection performance for CPU-only processing, add detection confidence scoring and threshold management",
+        "testStrategy": "Unit tests with various image types, test detection accuracy with known face/pose images, performance benchmarks for CPU processing",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Install and configure MediaPipe dependencies",
+            "description": "Set up MediaPipe for Python with CPU optimization flags",
+            "status": "done",
+            "priority": "high",
+            "details": "Install mediapipe package, configure CPU-only mode, set up model caching directory, verify MediaPipe models download correctly",
+            "testStrategy": "Test MediaPipe import and model loading"
+          },
+          {
+            "id": 2,
+            "title": "Implement face detection with BlazeFace",
+            "description": "Create face detection service using MediaPipe Face Detection",
+            "status": "done",
+            "priority": "high",
+            "details": "Initialize MediaPipe FaceDetection with confidence threshold 0.5, implement detection method returning bounding boxes, handle multi-face scenarios by selecting largest face, add detection confidence scoring",
+            "testStrategy": "Unit tests with various face orientations and lighting conditions"
+          },
+          {
+            "id": 3,
+            "title": "Implement pose detection for torso/shoulders",
+            "description": "Create pose detection for upper body keypoints",
+            "status": "done",
+            "priority": "high",
+            "details": "Initialize MediaPipe Pose with upper body mode, extract shoulder and hip keypoints, estimate torso bounds and jacket button position, handle missing keypoints gracefully",
+            "testStrategy": "Test with full body and partial body images"
+          },
+          {
+            "id": 4,
+            "title": "Create detection result data models",
+            "description": "Define Pydantic models for detection results",
+            "status": "done",
+            "priority": "medium",
+            "details": "Create FaceBox model with normalized coordinates, create PoseKeypoints model with confidence scores, create DetectionResult combining face and pose data, add validation for coordinate ranges",
+            "testStrategy": "Unit tests for model validation and serialization"
+          },
+          {
+            "id": 5,
+            "title": "Implement center-crop fallback logic",
+            "description": "Create fallback when detection fails",
+            "status": "done",
+            "priority": "high",
+            "details": "Calculate image center point, apply conservative margins (20% padding), maintain aspect ratios for each preset, log when fallback is triggered",
+            "testStrategy": "Test with images where detection intentionally fails"
+          },
+          {
+            "id": 6,
+            "title": "Build detection pipeline orchestrator",
+            "description": "Combine face and pose detection into single pipeline",
+            "status": "done",
+            "priority": "high",
+            "details": "Create DetectionPipeline class, implement async processing for parallel detection, add timeout handling (max 5 seconds), combine results with fallback logic",
+            "testStrategy": "Integration tests with various image types"
+          },
+          {
+            "id": 7,
+            "title": "Optimize for CPU performance",
+            "description": "Tune detection for CPU-only processing",
+            "status": "done",
+            "priority": "medium",
+            "details": "Implement image downsampling for detection (max 1920px), cache detection models in memory, use threading for parallel processing, measure and log processing times",
+            "testStrategy": "Performance benchmarks with 24MP images"
+          },
+          {
+            "id": 8,
+            "title": "Add confidence thresholds and validation",
+            "description": "Implement detection quality checks",
+            "status": "done",
+            "priority": "medium",
+            "details": "Set minimum confidence thresholds (face: 0.5, pose: 0.3), validate bounding boxes within image bounds, add detection quality scoring, implement result caching by upload_id",
+            "testStrategy": "Test edge cases with low quality detections"
+          }
+        ]
+      },
+      {
+        "id": 4,
+        "title": "Image Processing & Cropping Engine",
+        "description": "Create image processing and cropping logic with preset rules",
+        "status": "done",
+        "priority": "high",
+        "dependencies": [
+          "3"
+        ],
+        "details": "Implement the four preset cropping rules: Headshot (2000×2000) square crop with face-centered framing, Avatar (300×300) same crop as headshot different export size, Website Photo (1600×2000) portrait 4:5 ratio with upper-body framing, Full Body (3400×4000) portrait 17:20 ratio with full-figure framing. Create aspect ratio preservation logic, implement margin calculations (5-8% top margin, face-centered positioning), build crop boundary validation and adjustment algorithms, add support for manual crop adjustments within preset constraints",
+        "testStrategy": "Unit tests for each preset calculation, visual tests comparing expected vs actual crops, boundary condition tests",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Define preset configuration system",
+            "description": "Create configuration for all four crop presets",
+            "status": "done",
+            "priority": "high",
+            "details": "Define PresetConfig dataclass with dimensions and aspect ratios, create PRESETS dictionary with Headshot/Avatar/Website/FullBody specs, implement aspect ratio calculation utilities, add preset validation logic",
+            "testStrategy": "Unit tests for preset configuration loading and validation"
+          },
+          {
+            "id": 2,
+            "title": "Implement headshot/avatar crop calculator",
+            "description": "Create square crop logic for headshot and avatar",
+            "status": "done",
+            "priority": "high",
+            "details": "Calculate square crop from face box center, add 5-8% top margin above head, extend to mid-chest (1.2-1.4x face height), center horizontally with bounds checking, share crop between headshot (2000x2000) and avatar (300x300)",
+            "testStrategy": "Test with various face positions and sizes"
+          },
+          {
+            "id": 3,
+            "title": "Implement website photo crop calculator",
+            "description": "Create portrait 4:5 crop for website photo",
+            "status": "done",
+            "priority": "high",
+            "details": "Calculate 1600x2000 portrait crop, add 5-8% margin above head, extend to first jacket button area (2.0-2.2x face height), use pose keypoints if available for button estimation, maintain 4:5 aspect ratio",
+            "testStrategy": "Test with business attire photos and various poses"
+          },
+          {
+            "id": 4,
+            "title": "Implement full body crop calculator",
+            "description": "Create 17:20 portrait crop for full body",
+            "status": "done",
+            "priority": "high",
+            "details": "Calculate 3400x4000 portrait crop, anchor top 5-8% above head, include full figure if visible in image, fallback to extended website photo framing if no full body, maintain 17:20 aspect ratio",
+            "testStrategy": "Test with full body and partial body images"
+          },
+          {
+            "id": 5,
+            "title": "Build crop boundary validation system",
+            "description": "Validate and adjust crops within image bounds",
+            "status": "done",
+            "priority": "high",
+            "details": "Check if calculated crop exceeds image boundaries, implement smart adjustment to fit within bounds, maintain aspect ratio during adjustments, scale down if necessary to fit, add logging for adjustments made",
+            "testStrategy": "Test with edge cases near image boundaries"
+          },
+          {
+            "id": 6,
+            "title": "Create manual adjustment handler",
+            "description": "Support user adjustments within constraints",
+            "status": "done",
+            "priority": "medium",
+            "details": "Accept normalized rectangle coordinates from frontend, validate adjustments maintain preset aspect ratio, apply bounds checking to user input, merge user adjustments with auto-suggestions, track adjustment deltas for learning",
+            "testStrategy": "Test various manual adjustment scenarios"
+          },
+          {
+            "id": 7,
+            "title": "Implement crop execution engine",
+            "description": "Execute actual image cropping operations",
+            "status": "done",
+            "priority": "high",
+            "details": "Use Pillow for high-quality image cropping, convert normalized coords to pixel coordinates, implement Lanczos resampling for resize, maintain color profiles during crop, handle various image formats (JPEG, PNG)",
+            "testStrategy": "Visual quality tests, performance benchmarks"
+          }
+        ]
+      },
+      {
+        "id": 5,
+        "title": "Machine Learning & Heuristics System",
+        "description": "Build heuristic learning system with SQLite database",
+        "status": "done",
+        "priority": "medium",
+        "dependencies": [
+          "4"
+        ],
+        "details": "Design and create SQLite database schema with params table for EMA parameters and samples table for audit trail, implement Exponential Moving Average (EMA) learning algorithm, create feature extraction from images (dimensions, face box, pose presence), build heuristic application logic for improving initial crop suggestions, implement separate EMA buckets for different aspect classes and zoom levels, add heuristic persistence and retrieval mechanisms",
+        "testStrategy": "Unit tests for EMA calculations, integration tests for database operations, tests for heuristic improvement over time",
+        "subtasks": []
+      },
+      {
+        "id": 6,
+        "title": "Image Optimization Pipeline",
+        "description": "Implement image optimization pipeline with oxipng and pngquant",
+        "status": "done",
+        "priority": "medium",
+        "dependencies": [
+          "4"
+        ],
+        "details": "Integrate Pillow for high-quality Lanczos resizing, implement PNG optimization chain: oxipng (lossless) → pngquant (lossy), create size comparison logic to keep smaller optimized result, add EXIF metadata stripping for output files, implement batch processing for all four preset outputs, add optimization progress tracking and error handling",
+        "testStrategy": "Performance tests comparing optimized vs unoptimized sizes, quality comparison tests, batch processing stress tests",
+        "subtasks": []
+      },
+      {
+        "id": 7,
+        "title": "API Development & Endpoints",
+        "description": "Create FastAPI endpoints for upload, preview, and export",
+        "status": "done",
+        "priority": "high",
+        "dependencies": [
+          "2",
+          "3",
+          "4"
+        ],
+        "details": "POST /api/upload: File upload with validation and initial processing, POST /api/preview/:upload_id/recompute: Crop adjustment and recomputation, POST /api/export/:upload_id: Final processing and file generation, GET /api/health: Health check endpoint. Implement request validation, file size limits (40MB), and format checking, add comprehensive error responses and status codes, create session management with upload IDs",
+        "testStrategy": "Integration tests for each endpoint, file upload tests with various formats and sizes, error handling tests",
+        "subtasks": []
+      },
+      {
+        "id": 8,
+        "title": "Frontend Foundation (React + Vite)",
+        "description": "Initialize React frontend with Vite and TypeScript",
+        "status": "done",
+        "priority": "high",
+        "dependencies": [
+          "1"
+        ],
+        "details": "Set up Vite build system with TypeScript configuration, create React project structure with component organization, set up CSS framework and styling system, configure API client with proper TypeScript types, implement state management (Context API or lightweight store), set up development server and hot reload",
+        "testStrategy": "Build tests, TypeScript compilation tests, basic component render tests",
+        "subtasks": []
+      },
+      {
+        "id": 9,
+        "title": "File Upload Interface",
+        "description": "Build upload component with drag-and-drop functionality",
+        "status": "done",
+        "priority": "high",
+        "dependencies": [
+          "8"
+        ],
+        "details": "Create drag-and-drop file upload component, implement file picker fallback option, add file validation (size, type, format checking), build upload progress indicator, create error handling for invalid files, add preview of uploaded image before processing",
+        "testStrategy": "Component tests for upload functionality, file validation tests, UI interaction tests",
+        "subtasks": []
+      },
+      {
+        "id": 10,
+        "title": "Crop Editing Interface",
+        "description": "Create crop editor components with canvas-based UI",
+        "status": "done",
+        "priority": "high",
+        "dependencies": [
+          "8",
+          "9"
+        ],
+        "details": "Build canvas-based crop editor using React (consider react-easy-crop or custom), implement fixed aspect ratio constraints for each preset, add move and resize handles for crop adjustment, create keyboard controls for fine-tuning (arrow keys, nudge), implement zoom functionality for detailed editing, add undo/redo functionality (single-level as specified), build responsive design for different screen sizes",
+        "testStrategy": "Component tests for crop editor, interaction tests for all controls, visual regression tests",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Research and select crop library",
+            "description": "Evaluate React crop libraries or plan custom implementation",
+            "status": "done",
+            "priority": "high",
+            "details": "Evaluate react-easy-crop, react-image-crop, and react-avatar-editor, assess customization capabilities for fixed aspect ratios, check mobile touch support and performance, decide on library vs custom canvas implementation",
+            "testStrategy": "Create proof-of-concept with top candidates"
+          },
+          {
+            "id": 2,
+            "title": "Create base CropEditor component",
+            "description": "Build main crop editor component structure",
+            "status": "done",
+            "priority": "high",
+            "details": "Set up CropEditor component with TypeScript, implement image loading and display on canvas, add crop overlay with darkened non-crop area, create component props for image, aspect ratio, initial crop",
+            "testStrategy": "Component render tests, prop validation tests"
+          },
+          {
+            "id": 3,
+            "title": "Implement fixed aspect ratio constraints",
+            "description": "Enforce preset aspect ratios during cropping",
+            "status": "done",
+            "priority": "high",
+            "details": "Create aspect ratio enforcement for each preset, lock aspect ratio during resize operations, implement preset switcher maintaining crop center, add visual indicators for current aspect ratio",
+            "testStrategy": "Test aspect ratio maintenance during all interactions"
+          },
+          {
+            "id": 4,
+            "title": "Add drag and resize handles",
+            "description": "Create interactive crop manipulation controls",
+            "status": "done",
+            "priority": "high",
+            "details": "Implement drag to move crop area, add corner handles for proportional resize, add edge handles for constrained resize, implement smooth drag with requestAnimationFrame, add touch support for mobile devices",
+            "testStrategy": "Interaction tests for mouse and touch events"
+          },
+          {
+            "id": 5,
+            "title": "Implement keyboard controls",
+            "description": "Add keyboard shortcuts for fine control",
+            "status": "done",
+            "priority": "medium",
+            "details": "Arrow keys for 1px nudge movement, Shift+arrows for 10px movement, Plus/minus keys for zoom, Escape to reset crop, Enter to confirm crop",
+            "testStrategy": "Keyboard event handling tests"
+          },
+          {
+            "id": 6,
+            "title": "Add zoom and pan functionality",
+            "description": "Enable detailed editing with zoom",
+            "status": "done",
+            "priority": "medium",
+            "details": "Implement zoom slider (50%-200% range), Add mouse wheel zoom support, Maintain crop position during zoom, Add pan when zoomed in, Reset zoom button",
+            "testStrategy": "Zoom calculation tests, performance tests"
+          },
+          {
+            "id": 7,
+            "title": "Implement undo/redo system",
+            "description": "Single-level undo/redo as specified",
+            "status": "done",
+            "priority": "medium",
+            "details": "Store previous crop state, Implement undo button/shortcut (Ctrl+Z), Implement redo button/shortcut (Ctrl+Y), Clear history on image change, Visual feedback for undo/redo availability",
+            "testStrategy": "State management tests for undo/redo"
+          },
+          {
+            "id": 8,
+            "title": "Create responsive mobile interface",
+            "description": "Optimize crop editor for mobile devices",
+            "status": "done",
+            "priority": "high",
+            "details": "Responsive canvas sizing, Touch gesture support (pinch zoom, drag), Mobile-optimized controls layout, Prevent scroll during crop interaction, Test on various screen sizes",
+            "testStrategy": "Mobile device testing, touch interaction tests"
+          }
+        ]
+      },
+      {
+        "id": 11,
+        "title": "Preview System",
+        "description": "Implement preview system for all four crop presets",
+        "status": "done",
+        "priority": "medium",
+        "dependencies": [
+          "10"
+        ],
+        "details": "Create side-by-side preview layout for all four presets, implement real-time crop preview updates, add preset thumbnails with overlay indicators, build crop comparison view showing before/after, create preset-specific editing modes, add visual feedback for crop boundaries and constraints",
+        "testStrategy": "Component tests for preview updates, performance tests for real-time rendering, visual tests for layouts",
+        "subtasks": []
+      },
+      {
+        "id": 12,
+        "title": "Export & Output Management",
+        "description": "Build export functionality and output management",
+        "status": "done",
+        "priority": "high",
+        "dependencies": [
+          "11"
+        ],
+        "details": "Implement employee name parsing from filename with inline editing, create export processing with progress indicators, build file output organization system, add export success feedback with file links, implement 'Open output folder' functionality, create export history and file management features",
+        "testStrategy": "Integration tests for export flow, filename parsing tests, file organization tests",
+        "subtasks": []
+      },
+      {
+        "id": 13,
+        "title": "Containerization & Docker",
+        "description": "Create Docker containerization with multi-stage build",
+        "status": "done",
+        "priority": "high",
+        "dependencies": [
+          "7",
+          "12"
+        ],
+        "details": "Create multi-stage Dockerfile: Stage 1: Frontend build (Node.js), Stage 2: Backend setup (Python 3.11-slim), Stage 3: Final image with optimized layers. Install system dependencies (oxipng, pngquant, OpenCV dependencies), configure non-root user for security, set up proper volume mounting points, create docker-compose.yml for development and production",
+        "testStrategy": "Docker build tests, container startup tests, volume mount tests, security scanning",
+        "subtasks": []
+      },
+      {
+        "id": 14,
+        "title": "Storage & File System Management",
+        "description": "Implement storage management and file organization system",
+        "status": "done",
+        "priority": "medium",
+        "dependencies": [
+          "7"
+        ],
+        "details": "Create directory structure management: /data/originals/ with timestamp prefixes, /data/output/<Employee Name>/ with organized outputs, /data/model/ for heuristics and checkpoints. Implement filename sanitization for filesystem compatibility, add Unicode name handling with ASCII fallback, create duplicate handling (overwrite or suffix options), implement file cleanup and maintenance routines",
+        "testStrategy": "File system tests, Unicode handling tests, concurrent access tests, cleanup routine tests",
+        "subtasks": []
+      },
+      {
+        "id": 15,
+        "title": "Error Handling & Validation",
+        "description": "Add error handling and validation throughout the application",
+        "status": "done",
+        "priority": "high",
+        "dependencies": [
+          "7",
+          "12"
+        ],
+        "details": "Implement comprehensive input validation (file size, format, dimensions), create graceful failure handling for detection pipeline, add user-friendly error messages and recovery suggestions, implement server-side security validation (MIME type, file signatures), create fallback mechanisms for failed operations, add rate limiting and concurrent job management",
+        "testStrategy": "Error scenario tests, security validation tests, rate limiting tests, fallback mechanism tests",
+        "subtasks": []
+      },
+      {
+        "id": 16,
+        "title": "Observability & Monitoring",
+        "description": "Implement logging and basic metrics collection",
+        "status": "done",
+        "priority": "low",
+        "dependencies": [
+          "15"
+        ],
+        "details": "Set up structured logging with request ID tracking, implement performance metrics (processing time, detection success rate), create logging for all processing stages (load → detect → suggest → export), add failure tracking and manual override statistics, build basic health monitoring and status reporting, configure log rotation and management",
+        "testStrategy": "Logging tests, metrics collection tests, performance tracking tests",
+        "subtasks": []
+      },
+      {
+        "id": 17,
+        "title": "Testing & Quality Assurance",
+        "description": "Create comprehensive test suite for backend and frontend",
+        "status": "done",
+        "priority": "medium",
+        "dependencies": [
+          "15"
+        ],
+        "details": "Backend Testing: Unit tests for detection algorithms, integration tests for API endpoints, performance tests for processing pipeline, database tests for heuristics system. Frontend Testing: Component tests for crop editor, integration tests for upload/export flow, visual regression tests for UI components. End-to-End Testing: Full workflow tests with sample images, error scenario testing, performance validation",
+        "testStrategy": "Test coverage analysis, CI/CD integration tests, performance benchmarks against requirements",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Set up testing infrastructure",
+            "description": "Configure testing frameworks and tools",
+            "status": "done",
+            "priority": "high",
+            "details": "Set up pytest for backend with coverage reporting, configure Jest and React Testing Library for frontend, set up Playwright or Cypress for E2E tests, create test data fixtures and sample images, configure CI/CD test runners",
+            "testStrategy": "Verify all test frameworks run successfully"
+          },
+          {
+            "id": 2,
+            "title": "Write detection pipeline unit tests",
+            "description": "Test MediaPipe detection components",
+            "status": "done",
+            "priority": "high",
+            "details": "Test face detection with various orientations, test pose detection accuracy, test fallback logic triggers correctly, test confidence threshold validation, mock MediaPipe for isolated testing",
+            "testStrategy": "Achieve 90% coverage of detection code"
+          },
+          {
+            "id": 3,
+            "title": "Write cropping engine unit tests",
+            "description": "Test all crop calculation logic",
+            "status": "done",
+            "priority": "high",
+            "details": "Test each preset calculator independently, test boundary validation logic, test aspect ratio maintenance, test manual adjustment merging, use parameterized tests for multiple scenarios",
+            "testStrategy": "Test with edge cases and boundary conditions"
+          },
+          {
+            "id": 4,
+            "title": "Create API integration tests",
+            "description": "Test all API endpoints end-to-end",
+            "status": "done",
+            "priority": "high",
+            "details": "Test upload endpoint with various file types/sizes, test preview generation and recomputation, test export with all presets, test error handling for invalid inputs, test concurrent request handling",
+            "testStrategy": "Use TestClient for FastAPI integration testing"
+          },
+          {
+            "id": 5,
+            "title": "Write frontend component tests",
+            "description": "Test React components in isolation",
+            "status": "done",
+            "priority": "medium",
+            "details": "Test CropEditor component interactions, test upload component file handling, test preview component rendering, test export component workflow, mock API calls for isolation",
+            "testStrategy": "Achieve 80% frontend code coverage"
+          },
+          {
+            "id": 6,
+            "title": "Implement E2E workflow tests",
+            "description": "Test complete user workflows",
+            "status": "done",
+            "priority": "high",
+            "details": "Test full upload-crop-export workflow, test error recovery scenarios, test multi-preset editing flow, test mobile device workflows, create visual regression tests for UI",
+            "testStrategy": "Cover all critical user paths"
+          },
+          {
+            "id": 7,
+            "title": "Create performance benchmarks",
+            "description": "Validate performance requirements",
+            "status": "done",
+            "priority": "medium",
+            "details": "Test 24MP image processing time (<15s target), test optimization effectiveness (95% size reduction), test concurrent request performance, test memory usage under load, create performance regression tests",
+            "testStrategy": "Automated performance benchmarks in CI"
+          }
+        ]
+      },
+      {
+        "id": 18,
+        "title": "Deployment & Production Setup",
+        "description": "Set up deployment configuration for Portainer and TrueNAS",
+        "status": "done",
+        "priority": "low",
+        "dependencies": [
+          "13",
+          "17"
+        ],
+        "details": "Create production-ready docker-compose.yml, configure volume mounts for TrueNAS integration, set up environment variable management, create deployment documentation, implement backup and recovery procedures, configure resource limits and scaling parameters, set up monitoring and alerting for production",
+        "testStrategy": "Deployment tests, volume persistence tests, backup/recovery tests, resource limit tests",
+        "subtasks": []
+      }
+    ],
+    "metadata": {
+      "version": "1.0.0",
+      "lastUpdated": "2024-08-26T09:30:00Z",
+      "projectName": "QuickCrop - Photo Crop/Resize Web Tool",
+      "totalTasks": 18,
+      "completedTasks": 0,
+      "created": "2025-08-26T13:43:44.196Z",
+      "description": "Tasks for master context",
+      "updated": "2025-08-26T15:05:10.786Z"
+    }
+  }
+}

@@ -1,0 +1,293 @@
+Photo Crop/Resize Web Tool — Specification + Implementation Plan
+
+0) Summary
+
+Containerized web app, run under Portainer on a TrueNAS host. Processes one uploaded image at a time (JPEG/PNG), auto-suggests four crops via face/torso detection, lets user adjust in a preview UI, then outputs four PNGs optimized with local compressors. Stores originals and outputs on host-mounted volumes. Learns lightweight heuristics from accepted crops to improve future suggestions. No login; access controlled externally.
+
+⸻
+
+1) Goals and Scope
+	•	Inputs: JPEG, PNG. One image per session.
+	•	Outputs (PNG, web-optimized):
+	•	Full Body — 3400×4000
+	•	Headshot — 2000×2000
+	•	Website Photo — 1600×2000
+	•	Website Avatar — 300×300
+	•	Filenames:
+	•	Employee Name - Full Body.png
+	•	Employee Name - Headshot.png
+	•	Employee Name - Website.png
+	•	Employee Name - Avatar.png
+	•	Name handling: Parse from source filename, allow inline edit.
+	•	Storage:
+	•	Originals: /data/originals/
+	•	Per-employee outputs: /data/output/<Employee Name>/
+	•	Heuristic store: /data/model/heuristics.db (SQLite)
+	•	Run mode: Docker container, deployed via Portainer on TrueNAS. Local storage via bind mounts.
+	•	Auth: None. Restrict by network/reverse proxy.
+	•	Future: Bio header generation, optional batch mode, optional SSO.
+
+⸻
+
+2) Non-Functional Requirements
+	•	Performance: Process ≤15s for 24MP source on CPU-only host (target; depends on hardware).
+	•	Max file size: 40 MB (reject larger with clear error).
+	•	Reliability: Graceful failures, server-side validation, max 1 concurrent job per container instance.
+	•	Privacy: All processing local. No third-party APIs.
+	•	Observability: Structured logs, minimal metrics (requests count, failures, avg proc time).
+
+⸻
+
+3) Cropping Logic (AI assist + manual)
+
+3.1 Detection
+	•	Use local, open-source detection:
+	•	MediaPipe Face Detection (BlazeFace) for face box.
+	•	MediaPipe Pose or OpenCV full-body fallback for torso/top-button estimation.
+	•	If face missing, center-crop fallback with conservative margins.
+
+3.2 Preset Framing Rules
+
+All crops preserve aspect ratio; no stretching. Use these rules from detected face box (FB) and, if available, shoulder/torso keypoints.
+	•	Headshot (2000×2000) and Avatar (300×300): same crop, different export size.
+	•	Square crop.
+	•	Top margin: ~5–8% of crop height above head top.
+	•	Bottom: mid-chest (≈ 1.2–1.4× FB height below face center).
+	•	Horizontal: face centered; clamp to image bounds.
+	•	Website Photo (1600×2000) (portrait 4:5):
+	•	Top margin: ~5–8% above head.
+	•	Bottom: just below first jacket button / similar for women (≈ 2.0–2.2× FB height below face center, or pose keypoints at lower-chest).
+	•	Full Body (3400×4000) (portrait 17:20):
+	•	Anchor top ~5–8% above head; include full figure if present; otherwise mimic Website Photo with larger canvas.
+
+3.3 Heuristic Learning (no model retrain)
+	•	Store accepted rectangles per preset:
+	•	Input features: image dimensions, FB box (x,y,w,h) normalized, pose presence flag.
+	•	Output: user-confirmed crop rect (normalized) per preset.
+	•	Update rule:
+	•	Keep an exponential moving average (EMA) of offsets and scale factors from FB box to final crop per preset.
+	•	Maintain separate EMA buckets by aspect class (square vs portrait) and by zoom level bands.
+	•	Application:
+	•	On new image, compute initial crop from current EMA parameters, then refine with detection for bounds.
+
+⸻
+
+4) Compression and Export
+	•	Pipeline per output:
+	1.	Resize with high-quality Lanczos (Pillow).
+	2.	Write PNG.
+	3.	Optimize PNG using oxipng (lossless) followed by pngquant (quality 70–90, speed tuned). Keep the smaller result.
+	•	EXIF: Strip all metadata in outputs. Originals preserved as-is in /data/originals.
+
+⸻
+
+5) User Experience
+	•	Page: drag-and-drop or file picker → detection runs → four preset thumbnails with overlays.
+	•	Name field: prefilled from filename, editable.
+	•	Per-preset editor: move/resize crop box within fixed aspect ratio. Undo/redo (1-level is sufficient).
+	•	Export button: writes four PNGs to employee folder, shows links plus “Open output folder” hint.
+	•	Errors: large file, unreadable format, detection failed → explain and allow manual cropping fallback.
+
+⸻
+
+6) Tech Stack
+	•	Backend API: FastAPI (Python 3.11)
+	•	Image ops: Pillow, OpenCV, MediaPipe
+	•	Optimization: oxipng, pngquant (installed in image)
+	•	Frontend: React + Vite (TypeScript). Canvas for crop UI (e.g., react-easy-crop or custom).
+	•	Data: SQLite for heuristics (/data/model/heuristics.db)
+	•	Runtime: Gunicorn + Uvicorn workers
+	•	Container: Debian/Ubuntu slim base
+
+⸻
+
+7) API Contract
+
+POST /api/upload
+  multipart/form-data: file
+  returns: { upload_id, inferred_name, previews: {preset: {w,h,rect}}, message }
+
+POST /api/preview/:upload_id/recompute
+  body: { adjustments?: {preset: rect}, force_manual?: bool }
+  returns: { previews }
+
+POST /api/export/:upload_id
+  body: { employee_name, final_rects: {preset: rect} }
+  returns: { files: [{preset, path, bytes}], message }
+
+GET /api/health
+  returns: { status: "ok" }
+
+	•	rect uses normalized {x, y, w, h} in [0,1] relative to source.
+
+⸻
+
+8) Storage Layout (bind-mounted)
+	•	/data/originals/<timestamp>_<original-filename>
+	•	/data/output/<Employee Name>/<Employee Name> - Full Body.png
+	•	/data/output/<Employee Name>/<Employee Name> - Headshot.png
+	•	/data/output/<Employee Name>/<Employee Name> - Website.png
+	•	/data/output/<Employee Name>/<Employee Name> - Avatar.png
+	•	/data/model/heuristics.db and /data/model/checkpoints.json (EMA params)
+
+⸻
+
+9) Validation and Edge Cases
+	•	Enforce max 40 MB and image dimensions ≤ 120 MP.
+	•	If avatar/headshot crop would cut off head top because of bounds, scale down crop to fit while maintaining rules.
+	•	Unicode names: sanitize for filesystem; keep a display name but store filenames ASCII-safe with transliteration as fallback.
+	•	Duplicate filenames: overwrite allowed; or add suffix  (1) if ALLOW_OVERWRITE=false.
+
+⸻
+
+10) Logging and Metrics
+	•	Request ID per session.
+	•	Log stages with durations: load → detect → suggest → export.
+	•	Count detection failures and manual overrides by preset.
+
+⸻
+
+11) Security
+	•	No auth in app. Deploy behind reverse proxy or on restricted network. HTTPS termination outside container if needed.
+	•	Validate MIME and file signatures. Disable SVG.
+
+⸻
+
+12) Deployment via Portainer on TrueNAS
+	•	Build once, push to local registry or build in Portainer.
+	•	Bind mounts:
+	•	/mnt/truenas/photos/originals → /data/originals
+	•	/mnt/truenas/photos/output → /data/output
+	•	/mnt/truenas/photos/model → /data/model
+	•	Resource limits: 1–2 CPU, 1–2 GB RAM to start.
+
+12.1 docker-compose.yml (copyable)
+
+services:
+  phototool:
+    image: isomer/phototool:latest
+    container_name: phototool
+    ports:
+      - "8080:8080"
+    environment:
+      - MAX_FILE_MB=40
+      - ALLOW_OVERWRITE=true
+      - LOG_LEVEL=info
+    volumes:
+      - /mnt/truenas/photos/originals:/data/originals
+      - /mnt/truenas/photos/output:/data/output
+      - /mnt/truenas/photos/model:/data/model
+    restart: unless-stopped
+
+12.2 Dockerfile (copyable)
+
+FROM python:3.11-slim
+
+# System deps
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential ca-certificates curl git \
+    libgl1 libglib2.0-0 libjpeg62-turbo libpng16-16 \
+    pngquant oxipng \
+    && rm -rf /var/lib/apt/lists/*
+
+# App
+WORKDIR /app
+COPY backend/requirements.txt /app/backend/requirements.txt
+RUN pip install --no-cache-dir -r /app/backend/requirements.txt
+
+COPY backend /app/backend
+COPY frontend /app/frontend
+
+# Build frontend
+RUN cd /app/frontend && npm ci && npm run build
+
+# Static serve + API
+ENV PORT=8080 HOST=0.0.0.0
+CMD ["bash", "-lc", "cd /app/backend && python launch.py"]
+
+12.3 backend/requirements.txt (copyable)
+
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+gunicorn==22.0.0
+pillow==10.4.0
+opencv-python-headless==4.10.0.84
+mediapipe==0.10.14
+numpy==2.1.0
+python-multipart==0.0.9
+pydantic==2.8.2
+
+
+⸻
+
+13) Backend Workflow
+	1.	Validate upload, persist original to /data/originals.
+	2.	Load image into numpy/Pillow.
+	3.	Detect face box; attempt torso via pose. If fail, set center fallback.
+	4.	Compute initial rects via EMA heuristics + rules.
+	5.	Return previews to UI.
+	6.	Receive user-adjusted rects. On export:
+	•	Crop and resize per preset.
+	•	Write PNG.
+	•	Run oxipng, then pngquant. Keep smaller.
+	•	Save to /data/output/<Employee Name>/...
+	•	Update heuristics DB with deltas (EMA).
+
+⸻
+
+14) Heuristics DB Schema (SQLite)
+	•	params table:
+	•	key TEXT PRIMARY KEY (e.g., headshot.square.default)
+	•	ema_offset_x, ema_offset_y, ema_scale_w, ema_scale_h REAL
+	•	count INTEGER
+	•	samples table (optional audit):
+	•	ts INTEGER
+	•	preset TEXT
+	•	img_w, img_h INTEGER
+	•	fb_x, fb_y, fb_w, fb_h REAL
+	•	crop_x, crop_y, crop_w, crop_h REAL
+
+EMA update: p_new = alpha * sample + (1 - alpha) * p_old, default alpha=0.1.
+
+⸻
+
+15) Frontend Notes
+	•	Single page. React + Vite.
+	•	Components: UploadCard, NameField, PresetCropper (four instances), ExportPanel.
+	•	Cropper: fixed-ratio handles; keyboard nudge; zoom.
+	•	Show file size of outputs after optimization.
+
+⸻
+
+16) Configuration via ENV
+	•	MAX_FILE_MB default 40
+	•	ALLOW_OVERWRITE default true
+	•	EMA_ALPHA default 0.1
+	•	LOG_LEVEL default info
+
+⸻
+
+17) Acceptance Criteria
+	•	Given a valid JPEG, app produces four PNGs at exact sizes and filenames under per-employee folder.
+	•	Headshot and Avatar use same crop, different sizes.
+	•	Detection proposes reasonable boxes on typical headshots; manual edit works.
+	•	Output PNGs are smaller than unoptimized Pillow output in ≥95% of cases.
+	•	Heuristics update after export and influence next session (verify by logging).
+
+⸻
+
+18) Risks and Mitigations
+	•	Face not detected: provide center fallback and manual edit.
+	•	Non-standard poses: keep manual control primary.
+	•	Name parsing errors: editable field required before export.
+	•	File permissions on TrueNAS: document UID/GID; run as non-root user if needed.
+
+⸻
+
+19) Next Steps
+	•	Approve spec.
+	•	Generate code from this plan.
+	•	Build image, deploy via Portainer stack with the compose file above.
+	•	Smoke test on sample photos, then tune EMA defaults.
+
+If you want, I can output a starter repository tree with minimal launch.py, FastAPI endpoints, and a React crop UI scaffold.

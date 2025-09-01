@@ -1,0 +1,38 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    image: quickcrop-backend:local
+    container_name: quickcrop-backend
+    restart: unless-stopped
+    environment:
+      - TZ=America/Chicago
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test:
+        ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8000/openapi.json"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    image: quickcrop-frontend:local
+    container_name: quickcrop-frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      - TZ=America/Chicago
+    ports:
+      - "3000:3000"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:3000"]
+      interval: 30s
+      timeout: 3s
+      retries: 3

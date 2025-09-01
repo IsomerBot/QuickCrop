@@ -1,0 +1,74 @@
+version: '3.8'
+
+services:
+  isocrop:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: isocrop:latest
+    container_name: isocrop-production
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+      - "${FRONTEND_PORT:-3000}:3000"
+    environment:
+      - ENV=production
+      - BACKEND_URL=${BACKEND_URL:-http://localhost:8000}
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:3000}
+      - MAX_UPLOAD_SIZE=${MAX_UPLOAD_SIZE:-50MB}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3000}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    volumes:
+      - uploads:/app/uploads
+      - exports:/app/exports
+      - logs:/app/logs
+    restart: unless-stopped
+    networks:
+      - isocrop-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+  nginx:
+    image: nginx:alpine
+    container_name: isocrop-nginx
+    ports:
+      - "${NGINX_PORT:-80}:80"
+      - "${NGINX_SSL_PORT:-443}:443"
+    volumes:
+      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./docker/nginx/sites-enabled:/etc/nginx/sites-enabled:ro
+      - ./docker/ssl:/etc/nginx/ssl:ro
+      - nginx-cache:/var/cache/nginx
+    depends_on:
+      - isocrop
+    restart: unless-stopped
+    networks:
+      - isocrop-network
+
+networks:
+  isocrop-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/24
+
+volumes:
+  uploads:
+    driver: local
+  exports:
+    driver: local
+  logs:
+    driver: local
+  nginx-cache:
+    driver: local

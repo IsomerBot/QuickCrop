@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>React Easy Crop Coordinate Test</title>
+    <style>
+        body { font-family: monospace; padding: 20px; }
+        .container { width: 400px; height: 400px; border: 2px solid black; position: relative; overflow: hidden; }
+        .image { position: absolute; transform-origin: center; }
+        .info { margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <h2>Understanding react-easy-crop coordinates</h2>
+    
+    <div class="container" id="container">
+        <img id="image" class="image" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='600' height='800'%3E%3Crect width='600' height='800' fill='%23eee'/%3E%3Ctext x='300' y='100' text-anchor='middle' font-size='20'%3ETOP (y=100)%3C/text%3E%3Ctext x='300' y='400' text-anchor='middle' font-size='20'%3ECENTER (y=400)%3C/text%3E%3Ctext x='300' y='700' text-anchor='middle' font-size='20'%3EBOTTOM (y=700)%3C/text%3E%3Crect x='200' y='350' width='200' height='100' fill='red' opacity='0.5'/%3E%3Ctext x='300' y='400' text-anchor='middle' font-size='16' fill='white'%3ETARGET CROP%3C/text%3E%3C/svg%3E" />
+    </div>
+    
+    <div class="info">
+        <h3>React-easy-crop behavior:</h3>
+        <p>Image: 600x800</p>
+        <p>Container: 400x400</p>
+        <p>Target crop (red): x=200, y=350, w=200, h=100</p>
+        
+        <h4>Test different crop values:</h4>
+        <button onclick="setCrop(0, 0, 1)">Center (0,0) zoom=1</button>
+        <button onclick="setCrop(0, 0, 1.5)">Center (0,0) zoom=1.5</button>
+        <button onclick="setCrop(0, -25, 1.5)">Offset (0,-25) zoom=1.5</button>
+        <button onclick="setCrop(0, 25, 1.5)">Offset (0,25) zoom=1.5</button>
+        
+        <p id="status"></p>
+    </div>
+    
+    <script>
+        const img = document.getElementById('image');
+        const container = document.getElementById('container');
+        const status = document.getElementById('status');
+        
+        function setCrop(x, y, zoom) {
+            // React-easy-crop applies transforms like this:
+            // 1. Scale the image by zoom
+            // 2. Translate by crop x,y (as percentage of visible area)
+            
+            const imgWidth = 600;
+            const imgHeight = 800;
+            const containerWidth = 400;
+            const containerHeight = 400;
+            
+            // Apply zoom
+            img.style.transform = `scale(${zoom})`;
+            
+            // Calculate visible area after zoom
+            const visibleWidth = imgWidth / zoom;
+            const visibleHeight = imgHeight / zoom;
+            
+            // Convert percentage offset to pixels
+            const offsetX = (x / 100) * visibleWidth;
+            const offsetY = (y / 100) * visibleHeight;
+            
+            // Position image
+            // Center first
+            const centerX = (containerWidth - imgWidth * zoom) / 2;
+            const centerY = (containerHeight - imgHeight * zoom) / 2;
+            
+            // Apply offset (in react-easy-crop, positive Y moves image DOWN)
+            img.style.left = (centerX + offsetX * zoom) + 'px';
+            img.style.top = (centerY + offsetY * zoom) + 'px';
+            
+            status.innerHTML = `Zoom: ${zoom}, Crop: (${x}, ${y})<br>` +
+                             `Visible area: ${visibleWidth.toFixed(0)}x${visibleHeight.toFixed(0)}<br>` +
+                             `Image position: (${img.style.left}, ${img.style.top})`;
+        }
+        
+        // Initial position
+        setCrop(0, 0, 1);
+    </script>
+</body>
+</html>

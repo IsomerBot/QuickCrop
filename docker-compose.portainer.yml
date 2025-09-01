@@ -1,0 +1,274 @@
+version: '3.8'
+
+# Optimized Docker Compose configuration for Portainer deployment
+# This configuration includes all services needed for production
+
+services:
+  # Main application container
+  isocrop:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - BUILD_DATE=${BUILD_DATE:-$(date -u +'%Y-%m-%dT%H:%M:%SZ')}
+        - VCS_REF=${VCS_REF:-$(git rev-parse --short HEAD)}
+    image: isocrop:${VERSION:-latest}
+    container_name: isocrop-app
+    hostname: isocrop-app
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+      - "${FRONTEND_PORT:-3000}:3000"
+    environment:
+      # Application settings
+      - ENV=${ENV:-production}
+      - NODE_ENV=${NODE_ENV:-production}
+      
+      # URLs
+      - BACKEND_URL=${BACKEND_URL:-http://localhost:8000}
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:3000}
+      
+      # Security
+      - SECRET_KEY=${SECRET_KEY}
+      - JWT_SECRET=${JWT_SECRET}
+      
+      # CORS
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3000}
+      
+      # Upload settings
+      - MAX_UPLOAD_SIZE=${MAX_UPLOAD_SIZE:-50MB}
+      - ALLOWED_EXTENSIONS=${ALLOWED_EXTENSIONS:-jpg,jpeg,png,webp,gif,bmp,tiff}
+      
+      # Performance
+      - WORKERS=${WORKERS:-4}
+      - THREAD_POOL_SIZE=${THREAD_POOL_SIZE:-10}
+      - MAX_CONCURRENT_CROPS=${MAX_CONCURRENT_CROPS:-5}
+      
+      # Logging
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - LOG_FORMAT=${LOG_FORMAT:-json}
+      
+      # Optional services
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379}
+      - DATABASE_URL=${DATABASE_URL:-}
+      
+      # API Keys
+      - TINIFY_API_KEY=${TINIFY_API_KEY:-}
+      
+      # Monitoring
+      - SENTRY_DSN=${SENTRY_DSN:-}
+      - PROMETHEUS_ENABLED=${PROMETHEUS_ENABLED:-false}
+    volumes:
+      - uploads:/app/uploads
+      - exports:/app/exports
+      - logs:/app/logs
+      - temp:/app/temp
+    restart: unless-stopped
+    networks:
+      - isocrop-network
+    depends_on:
+      - redis
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          cpus: '${CONTAINER_CPU_LIMIT:-2}'
+          memory: ${CONTAINER_MEMORY_LIMIT:-2G}
+        reservations:
+          cpus: '${CONTAINER_CPU_RESERVATION:-0.5}'
+          memory: ${CONTAINER_MEMORY_RESERVATION:-512M}
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+      - "traefik.enable=true"
+      - "traefik.http.routers.isocrop.rule=Host(`${DOMAIN:-localhost}`)"
+      - "traefik.http.services.isocrop.loadbalancer.server.port=3000"
+
+  # Nginx reverse proxy and static file server
+  nginx:
+    image: nginx:alpine
+    container_name: isocrop-nginx
+    hostname: isocrop-nginx
+    ports:
+      - "${NGINX_PORT:-80}:80"
+      - "${NGINX_SSL_PORT:-443}:443"
+    volumes:
+      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./docker/nginx/sites-enabled:/etc/nginx/sites-enabled:ro
+      - ssl-certs:/etc/nginx/ssl:ro
+      - nginx-cache:/var/cache/nginx
+      - static-files:/usr/share/nginx/html:ro
+    depends_on:
+      - isocrop
+    restart: unless-stopped
+    networks:
+      - isocrop-network
+    healthcheck:
+      test: ["CMD", "nginx", "-t"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+
+  # Redis for caching and session storage
+  redis:
+    image: redis:7-alpine
+    container_name: isocrop-redis
+    hostname: isocrop-redis
+    command: redis-server --appendonly yes --maxmemory ${REDIS_MAX_MEMORY:-256mb} --maxmemory-policy allkeys-lru
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+    networks:
+      - isocrop-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+
+  # Optional: PostgreSQL database for persistent storage
+  # Uncomment if you want to use PostgreSQL instead of SQLite
+  # postgres:
+  #   image: postgres:15-alpine
+  #   container_name: isocrop-postgres
+  #   hostname: isocrop-postgres
+  #   environment:
+  #     - POSTGRES_DB=${POSTGRES_DB:-isocrop}
+  #     - POSTGRES_USER=${POSTGRES_USER:-isocrop}
+  #     - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+  #     - POSTGRES_INITDB_ARGS=--encoding=UTF8 --lc-collate=en_US.UTF-8 --lc-ctype=en_US.UTF-8
+  #   ports:
+  #     - "${POSTGRES_PORT:-5432}:5432"
+  #   volumes:
+  #     - postgres-data:/var/lib/postgresql/data
+  #     - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+  #   restart: unless-stopped
+  #   networks:
+  #     - isocrop-network
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-isocrop}"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 3
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         cpus: '1'
+  #         memory: 1G
+
+  # Optional: Backup service
+  # backup:
+  #   image: alpine:latest
+  #   container_name: isocrop-backup
+  #   command: /bin/sh -c "while true; do tar czf /backup/isocrop-data-$$(date +%Y%m%d-%H%M%S).tar.gz /data/*; find /backup -type f -mtime +7 -delete; sleep 86400; done"
+  #   volumes:
+  #     - uploads:/data/uploads:ro
+  #     - exports:/data/exports:ro
+  #     - backup:/backup
+  #   restart: unless-stopped
+  #   networks:
+  #     - isocrop-network
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         cpus: '0.25'
+  #         memory: 256M
+
+networks:
+  isocrop-network:
+    name: isocrop-network
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: ${NETWORK_SUBNET:-172.20.0.0/24}
+    labels:
+      - "com.isocrop.network=production"
+
+volumes:
+  # Application data volumes
+  uploads:
+    name: isocrop-uploads
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${UPLOADS_PATH:-/var/isocrop/uploads}
+  
+  exports:
+    name: isocrop-exports
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${EXPORTS_PATH:-/var/isocrop/exports}
+  
+  logs:
+    name: isocrop-logs
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${LOGS_PATH:-/var/isocrop/logs}
+  
+  temp:
+    name: isocrop-temp
+    driver: local
+  
+  # Service data volumes
+  redis-data:
+    name: isocrop-redis-data
+    driver: local
+  
+  nginx-cache:
+    name: isocrop-nginx-cache
+    driver: local
+  
+  ssl-certs:
+    name: isocrop-ssl-certs
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${SSL_CERTS_PATH:-/var/isocrop/ssl}
+  
+  static-files:
+    name: isocrop-static-files
+    driver: local
+  
+  # postgres-data:
+  #   name: isocrop-postgres-data
+  #   driver: local
+  
+  # backup:
+  #   name: isocrop-backup
+  #   driver: local
+  #   driver_opts:
+  #     type: none
+  #     o: bind
+  #     device: ${BACKUP_PATH:-/var/isocrop/backup}
+
+# Portainer-specific labels for the entire stack
+x-portainer:
+  stack_name: "IsoCrop Production"
+  stack_description: "AI-powered image cropping application"
+  stack_note: "Ensure all environment variables are configured before deployment"
