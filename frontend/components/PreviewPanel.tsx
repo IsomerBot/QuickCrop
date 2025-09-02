@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { UploadedFile, CropPreset, CROP_PRESETS, CropArea } from '@/types';
+import { UploadedFile, CropPreset, CROP_PRESETS, CropArea, CropPresetConfig } from '@/types';
 import { calculateCropPreviewStyles } from '@/utils/cropCalculations';
 import { ScanEye } from 'lucide-react';
 
@@ -12,11 +12,14 @@ interface PreviewPanelProps {
   showAllPresets?: boolean;
   onPresetSelect?: (preset: CropPreset) => void;
   allCropAreas?: Record<string, CropArea>;
+  presets?: CropPresetConfig[];
+  enableComparison?: boolean; // when false, hides comparison toggle/section
+  defaultShowComparison?: boolean; // initial state when comparisons are enabled
 }
 
 interface PreviewItemProps {
   file: UploadedFile;
-  presetConfig: typeof CROP_PRESETS[0];
+  presetConfig: CropPresetConfig;
   cropArea?: CropArea;
   isActive: boolean;
   onClick?: () => void;
@@ -89,17 +92,20 @@ export default function PreviewPanel({
   cropArea, 
   showAllPresets = true,
   onPresetSelect,
-  allCropAreas = {}
+  allCropAreas = {},
+  presets = CROP_PRESETS,
+  enableComparison = true,
+  defaultShowComparison = false
 }: PreviewPanelProps) {
   const [selectedPreview, setSelectedPreview] = useState<CropPreset>(preset);
-  const [showComparison, setShowComparison] = useState(false);
+  const [showComparison, setShowComparison] = useState(defaultShowComparison);
   
   useEffect(() => {
     setSelectedPreview(preset);
   }, [preset]);
   
-  const currentPresetConfig = CROP_PRESETS.find(p => p.id === selectedPreview);
-  const mainPresetConfig = CROP_PRESETS.find(p => p.id === preset);
+  const currentPresetConfig = presets.find(p => p.id === selectedPreview);
+  const mainPresetConfig = presets.find(p => p.id === preset);
   
   const handlePresetClick = (presetId: CropPreset) => {
     setSelectedPreview(presetId);
@@ -115,18 +121,20 @@ export default function PreviewPanel({
           <ScanEye className="w-5 h-5" />
           Preview
         </h2>
-        <button
-          onClick={() => setShowComparison(!showComparison)}
-          className="text-sm text-orange-600 hover:text-orange-700 transition-colors"
-        >
-          {showComparison ? 'Hide' : 'Show'} Sample Comparison
-        </button>
+        {enableComparison && (
+          <button
+            onClick={() => setShowComparison(!showComparison)}
+            className="text-sm text-orange-600 hover:text-orange-700 transition-colors"
+          >
+            {showComparison ? 'Hide' : 'Show'} Sample Comparison
+          </button>
+        )}
       </div>
       
       {/* Main Preview Area */}
       <div className="space-y-4">
         {/* Comparison View */}
-        {showComparison && (
+        {enableComparison && showComparison && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-gray-800 rounded-lg">
             <div>
               <h3 className="text-sm font-medium text-gray-300 mb-2">Your Crop</h3>
@@ -162,7 +170,7 @@ export default function PreviewPanel({
         )}
         
         {/* Main Preview */}
-        {!showComparison && mainPresetConfig && (
+        {(!enableComparison || !showComparison) && mainPresetConfig && (
           <div>
             <div className="border border-gray-600 rounded-lg overflow-hidden">
               <PreviewItem

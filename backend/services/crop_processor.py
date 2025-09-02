@@ -225,6 +225,54 @@ class ImageProcessor:
             return optimized_bytes
         else:
             return image_bytes
+
+    def process_with_custom_output(
+        self,
+        crop_box_dict: Dict[str, Any],
+        output_size: Tuple[int, int],
+        format: str = 'JPEG',
+        quality: Optional[int] = 95,
+        auto_optimize: bool = True
+    ) -> bytes:
+        """
+        Process image with a user-provided crop box and explicit output size.
+        Does not rely on PresetType; intended for project presets.
+        """
+        from services.crop_calculator import CropBox
+        # Use WEBSITE as a neutral preset for type-only field; does not affect output_size
+        user_crop = CropBox(
+            x=int(crop_box_dict.get('x', 0)),
+            y=int(crop_box_dict.get('y', 0)),
+            width=int(crop_box_dict.get('width', 100)),
+            height=int(crop_box_dict.get('height', 100)),
+            preset_type=PresetType.WEBSITE
+        )
+        processed = self.executor.execute_and_resize(
+            user_crop,
+            (int(output_size[0]), int(output_size[1])),
+            None
+        )
+        output = io.BytesIO()
+        fmt = format.upper()
+        if fmt == 'PNG':
+            processed.save(output, format='PNG', optimize=False)
+        elif fmt == 'WEBP':
+            processed.save(output, format='WEBP', quality=quality or 85, optimize=True)
+        else:
+            if processed.mode == 'RGBA':
+                background = Image.new('RGB', processed.size, (255, 255, 255))
+                background.paste(processed, mask=processed.split()[3])
+                processed = background
+            if auto_optimize:
+                processed.save(output, format='JPEG', quality=95, optimize=False)
+            else:
+                processed.save(output, format='JPEG', quality=quality or 85, optimize=True)
+        image_bytes = output.getvalue()
+        if auto_optimize:
+            return image_processor_service.optimize_image_bytes(
+                image_bytes, format=format.lower(), auto_optimize=True
+            )
+        return image_bytes
     
     def process_preset(
         self,

@@ -36,6 +36,11 @@ RUN pip install --no-cache-dir -U pip \
 # App code
 COPY backend/ /app/
 
+# MediaPipe Tasks model for object detection (EfficientDet-Lite0)
+RUN mkdir -p /app/models \
+ && wget -q -O /app/models/efficientdet_lite0.tflite \
+    https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite0/float32/1/efficientdet_lite0.tflite || true
+
 # Frontend static assets (exported by the previous stage)
 # Next build wrote to /app/out in the fe-build stage.
 COPY --from=fe-build /app/out /app/static
