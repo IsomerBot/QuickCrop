@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { UploadedFile, CropPreset, CROP_PRESETS, CropArea, CropPresetConfig } from '@/types';
+import { UploadedFile, CropPreset, CROP_PRESETS, CropArea, CropPresetConfig, PhotoCategory } from '@/types';
 import { calculateCropPreviewStyles } from '@/utils/cropCalculations';
 import { ScanEye } from 'lucide-react';
 
@@ -15,6 +15,7 @@ interface PreviewPanelProps {
   presets?: CropPresetConfig[];
   enableComparison?: boolean; // when false, hides comparison toggle/section
   defaultShowComparison?: boolean; // initial state when comparisons are enabled
+  category?: PhotoCategory; // 'employee' | 'project'
 }
 
 interface PreviewItemProps {
@@ -95,7 +96,8 @@ export default function PreviewPanel({
   allCropAreas = {},
   presets = CROP_PRESETS,
   enableComparison = true,
-  defaultShowComparison = false
+  defaultShowComparison = false,
+  category
 }: PreviewPanelProps) {
   const [selectedPreview, setSelectedPreview] = useState<CropPreset>(preset);
   const [showComparison, setShowComparison] = useState(defaultShowComparison);
@@ -172,14 +174,51 @@ export default function PreviewPanel({
         {/* Main Preview */}
         {(!enableComparison || !showComparison) && mainPresetConfig && (
           <div>
-            <div className="border border-gray-600 rounded-lg overflow-hidden">
-              <PreviewItem
-                file={file}
-                presetConfig={mainPresetConfig}
-                cropArea={cropArea}
-                isActive={false}
-                size="large"
-              />
+            <div className="border border-gray-600 rounded-lg overflow-hidden relative">
+              {category === 'project' && mainPresetConfig.id === 'proj_description' ? (
+                (() => {
+                  const overlayAR = 2303 / 1781; // overlay aspect ratio
+                  const gapFactor = 0.1875;      // 18.75% of overlay width from left edge
+                  const viewAR = 11 / 10;        // viewport/export aspect
+
+                  // Container matches overlay AR (so overlay is never distorted)
+                  // Viewport width as a fraction of overlay width
+                  const viewportFrac = viewAR / overlayAR;
+
+                  const styles = calculateCropPreviewStyles(cropArea, file.dimensions, viewAR);
+
+                  return (
+                    <div className="relative mx-auto overflow-hidden" style={{ aspectRatio: overlayAR.toString(), width: '100%' }}>
+                      {/* Image shown only within the viewport clipped region */}
+                      <div
+                        className="absolute top-0 bottom-0 overflow-hidden"
+                        style={{ left: `${gapFactor * 100}%`, width: `${viewportFrac * 100}%` }}
+                      >
+                        <img
+                          src={file.url}
+                          alt={`${mainPresetConfig.name} preview`}
+                          className="absolute"
+                          style={styles as React.CSSProperties}
+                        />
+                      </div>
+                      {/* Overlay on top, at native AR */}
+                      <img
+                        src="/overlay/project_description_overlay.png"
+                        alt="Project Description Overlay"
+                        className="absolute inset-0 w-full h-full object-contain opacity-100 pointer-events-none z-10"
+                      />
+                    </div>
+                  );
+                })()
+              ) : (
+                <PreviewItem
+                  file={file}
+                  presetConfig={mainPresetConfig}
+                  cropArea={cropArea}
+                  isActive={false}
+                  size="large"
+                />
+              )}
             </div>
           </div>
         )}

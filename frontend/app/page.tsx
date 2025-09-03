@@ -410,6 +410,7 @@ export default function Home() {
                   cropArea={suggestionsLoaded ? presetCropAreas[selectedPreset] : undefined}
                   onCroppingStateChange={handleCroppingStateChange}
                   presets={presets}
+                  category={category || 'employee'}
                 />
               </div>
 
@@ -426,6 +427,7 @@ export default function Home() {
                   presets={presets}
                   enableComparison={category !== 'project'}
                   defaultShowComparison={category !== 'project'}
+                  category={category || 'employee'}
                 />
               </div>
             </div>

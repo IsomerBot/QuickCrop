@@ -191,7 +191,7 @@ async def export_image(
             project_sizes = {
                 'proj_header': (2560, 1440),
                 'proj_thumbnail': (500, 500),
-                'proj_description': (3000, 2000),
+                'proj_description': (1100, 1000),
             }
             if request.preset not in project_sizes:
                 raise HTTPException(status_code=400, detail=f"Invalid preset: {request.preset}")

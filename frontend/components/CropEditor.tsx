@@ -4,7 +4,7 @@ import React, { useState, useCallback, useEffect, useRef } from 'react';
 import Cropper from 'react-easy-crop';
 import type { Point, Area } from 'react-easy-crop';
 import * as Slider from '@radix-ui/react-slider';
-import { UploadedFile, CropPreset, CROP_PRESETS, CropArea, CropPresetConfig } from '@/types';
+import { UploadedFile, CropPreset, CROP_PRESETS, CropArea, CropPresetConfig, PhotoCategory } from '@/types';
 import { Crop, ZoomIn, ZoomOut } from 'lucide-react';
 
 interface CropEditorProps {
@@ -16,6 +16,7 @@ interface CropEditorProps {
   cropArea?: CropArea;  // Initial crop suggestion from AI
   onCroppingStateChange?: (isCropping: boolean) => void;
   presets?: CropPresetConfig[];
+  category?: PhotoCategory; // 'employee' | 'project'
 }
 
 interface CropState {
@@ -44,7 +45,8 @@ export default function CropEditor({
   onCropChange,
   cropArea,
   onCroppingStateChange,
-  presets = CROP_PRESETS
+  presets = CROP_PRESETS,
+  category
 }: CropEditorProps) {
   // Find the current preset configuration
   const currentPresetConfig = presets.find(p => p.id === preset);
@@ -80,6 +82,7 @@ export default function CropEditor({
     const base = Math.max(1, limit);
     return allowUpscale ? Math.max(base, 10) : base; // allow up to 10x when enabled
   })();
+
   
   // State for boundary feedback
   const [showBoundaryFeedback, setShowBoundaryFeedback] = useState(false);
