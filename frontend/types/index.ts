@@ -1,8 +1,25 @@
-export type CropPreset = 'headshot' | 'full_body' | 'website';
-export type ExportSize = 'headshot' | 'avatar' | 'website' | 'full_body';
+export type PhotoCategory = 'employee' | 'project';
+
+// Preset identifiers (include both employee and project)
+export type PresetId =
+  | 'headshot'
+  | 'full_body'
+  | 'website'
+  | 'proj_header'
+  | 'proj_thumbnail'
+  | 'proj_description';
+
+export type ExportSize =
+  | 'headshot'
+  | 'avatar'
+  | 'website'
+  | 'full_body'
+  | 'proj_banner'
+  | 'proj_thumbnail'
+  | 'proj_description';
 
 export interface CropPresetConfig {
-  id: CropPreset;
+  id: PresetId;
   name: string;
   aspectRatio: [number, number];
   outputSizes?: Array<{
@@ -37,7 +54,7 @@ export interface CropArea {
 
 export interface ProcessingResult {
   fileId: string;
-  preset: CropPreset;
+  preset: PresetId;
   outputUrl: string;
   processingTime: number;
 }
@@ -48,7 +65,8 @@ export interface ApiResponse<T> {
   message?: string;
 }
 
-export const CROP_PRESETS: CropPresetConfig[] = [
+// Employee presets (existing behavior)
+export const EMPLOYEE_PRESETS: CropPresetConfig[] = [
   {
     id: 'headshot',
     name: 'Headshot',
@@ -66,7 +84,7 @@ export const CROP_PRESETS: CropPresetConfig[] = [
     outputSizes: [
       { id: 'full_body', name: 'Full Body', size: [3400, 4000] }
     ],
-    description: 'Portrait crop (3400x4000) with full-figure framing for professional photos'
+    description: 'Portrait crop with full-figure framing for marketing use'
   },
   {
     id: 'website',
@@ -75,6 +93,50 @@ export const CROP_PRESETS: CropPresetConfig[] = [
     outputSizes: [
       { id: 'website', name: 'Website', size: [1600, 2000] }
     ],
-    description: 'Portrait crop (1600x2000) with upper-body framing for website headers'
+    description: 'Portrait crop with upper-body framing for website use'
   }
 ];
+
+// Project presets (new)
+export const PROJECT_PRESETS: CropPresetConfig[] = [
+  {
+    id: 'proj_header',
+    name: 'Website Header',
+    aspectRatio: [16, 9],
+    outputSizes: [
+      { id: 'proj_header', name: 'Website Header', size: [2560, 1440] }
+    ],
+    description: 'Header image for experience page on website'
+  },
+  {
+    id: 'proj_thumbnail',
+    name: 'Website Thumbnail',
+    aspectRatio: [1, 1],
+    outputSizes: [
+      { id: 'proj_thumbnail', name: 'Website Thumbnail', size: [500, 500] }
+    ],
+    description: 'Square image for experience navigation on website'
+  },
+  {
+    id: 'proj_description',
+    name: 'Project Description',
+    aspectRatio: [3, 2],
+    outputSizes: [
+      { id: 'proj_description', name: 'Project Description', size: [3000, 2000] }
+    ],
+    description: 'Horizontal image for use in marketing materials'
+  }
+];
+
+export const PRESETS: Record<PhotoCategory, CropPresetConfig[]> = {
+  employee: EMPLOYEE_PRESETS,
+  project: PROJECT_PRESETS,
+};
+
+// Backwards compatibility for existing imports
+export type CropPreset = PresetId;
+export const CROP_PRESETS: CropPresetConfig[] = EMPLOYEE_PRESETS;
+
+export function getPresets(category: PhotoCategory): CropPresetConfig[] {
+  return PRESETS[category] || EMPLOYEE_PRESETS;
+}

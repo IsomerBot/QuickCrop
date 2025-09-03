@@ -130,28 +130,22 @@ async def export_image(
             detail=f"Upload {upload_id} not found"
         )
     
-    # Get face detection - convert bytes to numpy array first
+    # Attempt face detection (required for employee-only presets)
     import numpy as np
     import cv2
     nparr = np.frombuffer(image_data, np.uint8)
     image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
     detection_result = detector.detect(image)
-    if not detection_result or not detection_result.face:
-        raise HTTPException(
-            status_code=400,
-            detail="No faces detected in image"
-        )
-    
-    # Convert detection to FaceBox
-    bbox = detection_result.face.bbox
-    # Note: bbox is normalized (0-1), need to convert to pixels
     height, width = image.shape[:2]
-    face = FaceBox(
-        x=int(bbox[0] * width),
-        y=int(bbox[1] * height),
-        width=int(bbox[2] * width),
-        height=int(bbox[3] * height)
-    )
+    face = None
+    if detection_result and detection_result.face:
+        bbox = detection_result.face.bbox
+        face = FaceBox(
+            x=int(bbox[0] * width),
+            y=int(bbox[1] * height),
+            width=int(bbox[2] * width),
+            height=int(bbox[3] * height)
+        )
     
     # Create adjustment if provided
     adjustment = None
@@ -170,41 +164,56 @@ async def export_image(
             'website': PresetType.WEBSITE,
             'full_body': PresetType.FULL_BODY
         }
-        
         preset_type = preset_map.get(request.preset)
-        if not preset_type:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid preset: {request.preset}"
-            )
-        
-        # Process single preset
-        
-        # If crop_box is provided, use it directly instead of AI calculation
-        if request.crop_box:
-            processed = processor.process_with_crop_box(
-                request.crop_box,
-                preset_type,
-                format=request.format.upper(),
-                quality=request.quality if not request.auto_optimize else None,
-                auto_optimize=request.auto_optimize
-            )
+        # Handle employee presets via existing flow
+        if preset_type:
+            if face is None:
+                raise HTTPException(status_code=400, detail="No faces detected in image")
+            if request.crop_box:
+                processed = processor.process_with_crop_box(
+                    request.crop_box,
+                    preset_type,
+                    format=request.format.upper(),
+                    quality=request.quality if not request.auto_optimize else None,
+                    auto_optimize=request.auto_optimize
+                )
+            else:
+                processed = processor.process_preset(
+                    preset_type,
+                    face,
+                    adjustment,
+                    format=request.format.upper(),
+                    quality=request.quality if not request.auto_optimize else None,
+                    auto_optimize=request.auto_optimize
+                )
         else:
-            processed = processor.process_preset(
-                preset_type,
-                face,
-                adjustment,
+            # Project presets: custom sizes + crop_box required
+            project_sizes = {
+                'proj_header': (2560, 1440),
+                'proj_thumbnail': (500, 500),
+                'proj_description': (3000, 2000),
+            }
+            if request.preset not in project_sizes:
+                raise HTTPException(status_code=400, detail=f"Invalid preset: {request.preset}")
+            if not request.crop_box:
+                raise HTTPException(status_code=400, detail="crop_box is required for project presets")
+            processed = processor.process_with_custom_output(
+                request.crop_box,
+                project_sizes[request.preset],
                 format=request.format.upper(),
                 quality=request.quality if not request.auto_optimize else None,
                 auto_optimize=request.auto_optimize
             )
-        
+
         # Determine content type
-        content_type = "image/jpeg" if request.format.lower() == "jpeg" else "image/png"
-        
-        # Generate output ID for tracking
+        fmt = request.format.lower()
+        if fmt == 'png':
+            content_type = 'image/png'
+        elif fmt == 'webp':
+            content_type = 'image/webp'
+        else:
+            content_type = 'image/jpeg'
         output_id = f"{upload_id}_{request.preset}_{request.format}"
-        
         return StreamingResponse(
             io.BytesIO(processed),
             media_type=content_type,

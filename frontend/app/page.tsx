@@ -5,17 +5,21 @@ import ImageUploader from '@/components/ImageUploader';
 import CropEditor from '@/components/CropEditor';
 import PreviewPanel from '@/components/PreviewPanel';
 import ExportOptions from '@/components/ExportOptions';
-import { UploadedFile, CropPreset, CropArea, CROP_PRESETS } from '@/types';
+import { UploadedFile, CropPreset, CropArea, CROP_PRESETS, PhotoCategory, getPresets } from '@/types';
+import CategoryModal from '@/components/CategoryModal';
 import { apiClient } from '@/lib/api';
 
 export default function Home() {
   const [uploadedFile, setUploadedFile] = useState<UploadedFile | null>(null);
   const [uploadId, setUploadId] = useState<string | null>(null);
   const [selectedPreset, setSelectedPreset] = useState<CropPreset>('headshot');
+  const [category, setCategory] = useState<PhotoCategory | null>(null);
   const [presetCropAreas, setPresetCropAreas] = useState<Record<string, CropArea>>({});
   const [isProcessing, setIsProcessing] = useState(false);
   const [isCropping, setIsCropping] = useState(false);
   const [suggestionsLoaded, setSuggestionsLoaded] = useState(false);
+  const [classifying, setClassifying] = useState(false);
+  const presets = getPresets(category || 'employee');
 
   const handleFileUpload = async (file: File) => {
     setIsProcessing(true);
@@ -38,16 +42,53 @@ export default function Home() {
       dimensions: dimensions
     };
     setUploadedFile(uploadedFileData);
+    // Reset category until classification completes
+    setCategory(null);
     setIsProcessing(false);
     
     // Try to upload to backend and get AI crop suggestions
+    setClassifying(true);
     apiClient.uploadSingle(file).then(async response => {
       if (response && response.file_id) {
         setUploadId(response.file_id);
+        // Auto-select category based on face detection
+        try {
+          const isEmployee = (response.faces_detected ?? 0) > 0 || response.status === 'ready';
+          const cat: PhotoCategory = isEmployee ? 'employee' : 'project';
+          setCategory(cat);
+          const first = getPresets(cat)[0]?.id as CropPreset;
+          if (first) setSelectedPreset(first);
+        } finally {
+          setClassifying(false);
+        }
         
         // Get AI crop suggestions based on our tuned MediaPipe rules
         try {
           const suggestions = await apiClient.getCropSuggestions(response.file_id);
+          // Auto-classify based on face area percentage (> 3% = employee)
+          try {
+            const iw = suggestions?.image_dimensions?.width;
+            const ih = suggestions?.image_dimensions?.height;
+            const fd = suggestions?.face_detection;
+            const fw = fd?.width;
+            const fh = fd?.height;
+            if (iw && ih && fw && fh) {
+              const pct = (fw * fh) / (iw * ih) * 100;
+              const cat: PhotoCategory = pct > 3 ? 'employee' : 'project';
+              setCategory(cat);
+              const firstPreset = getPresets(cat)[0]?.id as CropPreset;
+              if (firstPreset) setSelectedPreset(firstPreset);
+            } else {
+              // Fallback if missing data
+              const isEmployee = (response.faces_detected ?? 0) > 0 || response.status === 'ready';
+              const cat: PhotoCategory = isEmployee ? 'employee' : 'project';
+              setCategory(cat);
+              const firstPreset = getPresets(cat)[0]?.id as CropPreset;
+              if (firstPreset) setSelectedPreset(firstPreset);
+            }
+          } finally {
+            setClassifying(false);
+          }
           
           if (suggestions && suggestions.crop_suggestions) {
             // Apply the AI suggestions as initial crop areas
@@ -75,11 +116,18 @@ export default function Home() {
             // No suggestions available
           }
         } catch (error) {
-          // Continue without suggestions if they fail
+          // Continue without suggestions if they fail; fallback to simple face presence
+          const isEmployee = (response.faces_detected ?? 0) > 0 || response.status === 'ready';
+          const cat: PhotoCategory = isEmployee ? 'employee' : 'project';
+          setCategory(cat);
+          const firstPreset = getPresets(cat)[0]?.id as CropPreset;
+          if (firstPreset) setSelectedPreset(firstPreset);
+          setClassifying(false);
         }
       }
     }).catch(error => {
       // Backend upload failed, but we can continue with local processing
+      setClassifying(false);
     });
   };
 
@@ -98,15 +146,18 @@ export default function Home() {
     
     setIsProcessing(true);
     try {
-      // Map export sizes to backend preset format
+      // Map export sizes to backend preset format (employee)
       const sizeToPresetMap: Record<string, string> = {
         'headshot': 'headshot',
         'avatar': 'headshot',  // Avatar uses headshot crop, just smaller output
         'website': 'website',
-        'full_body': 'full_body'
+        'full_body': 'full_body',
+        'proj_header': 'proj_header',
+        'proj_thumbnail': 'proj_thumbnail',
+        'proj_description': 'proj_description',
       };
 
-      // If we have an upload ID, use the backend API
+      // Use backend API when uploadId is available (Employee and Project)
       if (uploadId) {
         if (exportSettings.exportAll && exportSettings.selectedSizes.length > 0) {
           // Export each preset individually to get proper compressed images
@@ -133,7 +184,14 @@ export default function Home() {
               a.href = url;
               // Replace spaces with underscores and convert to lowercase
               const sanitizedName = exportSettings.employeeName.replace(/\s+/g, '_').toLowerCase();
-              a.download = `${sanitizedName}_${size}.${exportSettings.format}`;
+              // Suffix mapping for project workflow
+              const suffixMap: Record<string, string> = {
+                'proj_header': 'header',
+                'proj_thumbnail': 'thumbnail',
+                'proj_description': 'description',
+              };
+              const suffix = (category === 'project') ? (suffixMap[size] || size) : size;
+              a.download = `${sanitizedName}_${suffix}.${exportSettings.format}`;
               document.body.appendChild(a);
               a.click();
               document.body.removeChild(a);
@@ -163,7 +221,13 @@ export default function Home() {
           a.href = url;
           // Replace spaces with underscores and convert to lowercase
           const sanitizedName = exportSettings.employeeName.replace(/\s+/g, '_').toLowerCase();
-          a.download = `${sanitizedName}_${selectedPreset}.${exportSettings.format}`;
+          const suffixMap: Record<string, string> = {
+            'proj_header': 'header',
+            'proj_thumbnail': 'thumbnail',
+            'proj_description': 'description',
+          };
+          const suffix = (category === 'project') ? (suffixMap[selectedPreset] || String(selectedPreset)) : String(selectedPreset);
+          a.download = `${sanitizedName}_${suffix}.${exportSettings.format}`;
           document.body.appendChild(a);
           a.click();
           document.body.removeChild(a);
@@ -201,7 +265,10 @@ export default function Home() {
       'headshot': 'headshot',
       'avatar': 'headshot',
       'website': 'website',
-      'full_body': 'full_body'
+      'full_body': 'full_body',
+      'proj_header': 'proj_header',
+      'proj_thumbnail': 'proj_thumbnail',
+      'proj_description': 'proj_description',
     };
     
     for (const exportSize of (exportSettings.exportAll ? exportSettings.selectedSizes : [selectedPreset])) {
@@ -213,8 +280,8 @@ export default function Home() {
         continue;
       }
       
-      // Get preset config for dimensions
-      const presetConfig = CROP_PRESETS.find(p => p.id === preset);
+      // Get preset config for dimensions using active preset set
+      const presetConfig = presets.find(p => p.id === preset);
       if (!presetConfig) continue;
       
       // Find the right output size for this export
@@ -248,7 +315,14 @@ export default function Home() {
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `${exportSettings.employeeName}_${exportSize}.${exportSettings.format}`;
+            const sanitized = exportSettings.employeeName.replace(/\s+/g, '_').toLowerCase();
+            const suffixMap: Record<string, string> = {
+              'proj_header': 'header',
+              'proj_thumbnail': 'thumbnail',
+              'proj_description': 'description',
+            };
+            const suffix = (category === 'project') ? (suffixMap[exportSize as string] || String(exportSize)) : String(exportSize);
+            a.download = `${sanitized}_${suffix}.${exportSettings.format}`;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
@@ -264,13 +338,11 @@ export default function Home() {
   };
 
   const handleCropChange = (cropArea: CropArea) => {
-    // Only update if we have suggestions loaded or the user is actively cropping
-    if (suggestionsLoaded || isCropping) {
-      setPresetCropAreas(prev => ({
-        ...prev,
-        [selectedPreset]: cropArea
-      }));
-    }
+    // Always update so the preview responds in real time
+    setPresetCropAreas(prev => ({
+      ...prev,
+      [selectedPreset]: cropArea
+    }));
   };
 
   const handlePresetChange = (preset: CropPreset) => {
@@ -317,6 +389,16 @@ export default function Home() {
           </div>
         ) : (
           <>
+            {/* Category selection modal */}
+            <CategoryModal
+              open={!category && !classifying}
+              onSelect={(cat) => {
+                setCategory(cat);
+                const first = getPresets(cat)[0]?.id as CropPreset;
+                if (first) setSelectedPreset(first);
+              }}
+              onCancel={() => setCategory('employee')}
+            />
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
               {/* Left Column - Crop Editor */}
               <div className="space-y-6">
@@ -327,18 +409,23 @@ export default function Home() {
                   onCropChange={handleCropChange}
                   cropArea={suggestionsLoaded ? presetCropAreas[selectedPreset] : undefined}
                   onCroppingStateChange={handleCroppingStateChange}
+                  presets={presets}
                 />
               </div>
 
               {/* Right Column - Preview Panel */}
               <div className="space-y-6">
                 <PreviewPanel
+                  key={category || 'none'}
                   file={uploadedFile}
                   preset={selectedPreset}
                   cropArea={presetCropAreas[selectedPreset]}
                   showAllPresets={true}
                   onPresetSelect={handlePresetChange}
                   allCropAreas={presetCropAreas}
+                  presets={presets}
+                  enableComparison={category !== 'project'}
+                  defaultShowComparison={category !== 'project'}
                 />
               </div>
             </div>
@@ -353,6 +440,8 @@ export default function Home() {
                 onExport={handleExport}
                 isProcessing={isProcessing}
                 onPresetSelect={handlePresetChange}
+                presets={presets}
+                nameLabel={category === 'project' ? 'Project Name' : 'Employee Name'}
               />
             </div>
           </>

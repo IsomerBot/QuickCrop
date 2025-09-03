@@ -1,7 +1,15 @@
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from "axios";
 
 /** Minimal shapes; refine later if needed */
-export interface UploadResponse { file_id: string }
+export interface UploadResponse {
+  file_id: string;
+  filename?: string;
+  size?: number;
+  content_type?: string;
+  dimensions?: { width: number; height: number };
+  faces_detected?: number; // 0 or 1 in current backend
+  status?: 'ready' | 'no_faces' | 'error';
+}
 export interface Suggestion { [k: string]: any }
 export interface CropSuggestionsResponse {
   crop_suggestions: Suggestion[];
@@ -63,21 +71,12 @@ async function uploadSingle(file: File): Promise<UploadResponse> {
   return data;
 }
 
-// Suggestions (raw array)
-async function getSuggestions(uploadId: string): Promise<Suggestion[]> {
+// Suggestions (backend returns an object with crop_suggestions, image_dimensions, face_detection)
+async function getCropSuggestions(uploadId: string): Promise<CropSuggestionsResponse> {
   const { data } = await client.get(
     `/api/v1/suggestions/${encodeURIComponent(uploadId)}/suggestions`
   );
   return data;
-}
-
-// Suggestions (shape expected by page.tsx)
-async function getCropSuggestions(uploadId: string): Promise<CropSuggestionsResponse> {
-  const arr = await getSuggestions(uploadId);
-  return {
-    crop_suggestions: Array.isArray(arr) ? arr : [],
-    face_detection: { center_y: 0 },
-  };
 }
 
 // Process
@@ -129,8 +128,7 @@ async function exportImage(uploadId: string, body: ExportRequest): Promise<Blob>
     const preset = body?.preset ? `-${body.preset}` : "";
     filename = `quickcrop${preset}-${Date.now()}.${ext}`;
   }
-
-  try { triggerDownload(blob, filename); } catch { /* caller still gets blob */ }
+  // Do not auto-download here; caller handles naming and download trigger.
   return blob;
 }
 
@@ -163,7 +161,6 @@ async function healthReady(): Promise<any> {
 /** ---- Expose as a typed client with helpers ---- */
 export const apiClient = client as AxiosInstance & {
   uploadSingle: (file: File) => Promise<UploadResponse>;
-  getSuggestions: (uploadId: string) => Promise<Suggestion[]>;
   getCropSuggestions: (uploadId: string) => Promise<CropSuggestionsResponse>;
   preview: (uploadId: string, body: PreviewRequest) => Promise<any>;
   exportResult: (uploadId: string, body: ExportRequest) => Promise<any>;
@@ -177,7 +174,6 @@ export const apiClient = client as AxiosInstance & {
 
 // attach methods
 (apiClient as any).uploadSingle = uploadSingle;
-(apiClient as any).getSuggestions = getSuggestions;
 (apiClient as any).getCropSuggestions = getCropSuggestions;
 (apiClient as any).preview = preview;
 (apiClient as any).exportResult = exportResult;

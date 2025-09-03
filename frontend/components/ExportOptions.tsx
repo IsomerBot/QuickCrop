@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { UploadedFile, CropPreset, ExportSize, CROP_PRESETS, CropArea } from '@/types';
+import { UploadedFile, CropPreset, ExportSize, CROP_PRESETS, CropArea, CropPresetConfig } from '@/types';
 import * as Slider from '@radix-ui/react-slider';
 import { calculateCropPreviewStyles } from '@/utils/cropCalculations';
 import { FolderInput, ImageDown } from 'lucide-react';
@@ -14,6 +14,8 @@ interface ExportOptionsProps {
   onExport: (options: ExportSettings) => Promise<void>;
   isProcessing: boolean;
   onPresetSelect?: (preset: CropPreset) => void;
+  presets?: CropPresetConfig[];
+  nameLabel?: string;
 }
 
 export interface ExportSettings {
@@ -45,7 +47,9 @@ export default function ExportOptions({
   allCropAreas = {},
   onExport, 
   isProcessing,
-  onPresetSelect
+  onPresetSelect,
+  presets = CROP_PRESETS,
+  nameLabel = 'Employee Name'
 }: ExportOptionsProps) {
   // Export settings
   const [format, setFormat] = useState<'jpeg' | 'png' | 'webp'>('jpeg');
@@ -54,12 +58,22 @@ export default function ExportOptions({
   const [autoOptimize, setAutoOptimize] = useState(true);  // New: Smart compression with Tinify
   // Always export multiple - no toggle needed
   const exportAll = true;
-  const [selectedSizes, setSelectedSizes] = useState<ExportSize[]>(['headshot', 'avatar', 'website', 'full_body']);
+  const availableSizeEntries = useMemo(() => {
+    const entries: { id: ExportSize; name: string }[] = [];
+    presets.forEach(p => (p.outputSizes || []).forEach(s => {
+      if (!entries.some(e => e.id === s.id)) entries.push({ id: s.id as ExportSize, name: s.name });
+    }));
+    return entries;
+  }, [presets]);
+  const [selectedSizes, setSelectedSizes] = useState<ExportSize[]>(() => availableSizeEntries.map(e => e.id));
+  useEffect(() => {
+    setSelectedSizes(availableSizeEntries.map(e => e.id));
+  }, [availableSizeEntries]);
   
   // Employee name parsing
   const [employeeName, setEmployeeName] = useState('');
   const [isEditingName, setIsEditingName] = useState(false);
-  const [autoDetectName, setAutoDetectName] = useState(true);
+  const [autoDetectName, setAutoDetectName] = useState(nameLabel === 'Employee Name');
   
   // Export management
   const [exportHistory, setExportHistory] = useState<ExportHistory[]>([]);
@@ -69,6 +83,7 @@ export default function ExportOptions({
   
   // Parse employee name from filename
   useEffect(() => {
+    if (nameLabel !== 'Employee Name') return; // Disable filename parsing for Project
     if (autoDetectName && file && file.name) {
       // Try to extract name from filename patterns like:
       // "john_doe_photo.jpg", "JohnDoe.jpg", "john-doe-headshot.png"
@@ -88,7 +103,7 @@ export default function ExportOptions({
         setEmployeeName(nameWithoutExt);
       }
     }
-  }, [file?.name, autoDetectName]);
+  }, [file?.name, autoDetectName, nameLabel]);
   
   // Handle size selection for batch export
   const handleSizeToggle = (sizeId: ExportSize) => {
@@ -141,7 +156,7 @@ export default function ExportOptions({
         timestamp: new Date(),
         fileName: `${employeeName}_${preset}.${format}`,
         employeeName,
-        preset: CROP_PRESETS.find(p => p.id === preset)?.name || preset,
+        preset: presets.find(p => p.id === preset)?.name || preset,
         format,
         size: Math.floor(file.size * 0.8), // Simulated compressed size
         status: 'success'
@@ -165,7 +180,7 @@ export default function ExportOptions({
         timestamp: new Date(),
         fileName: `${employeeName}_${preset}.${format}`,
         employeeName,
-        preset: CROP_PRESETS.find(p => p.id === preset)?.name || preset,
+        preset: presets.find(p => p.id === preset)?.name || preset,
         format,
         size: 0,
         status: 'failed'
@@ -195,7 +210,7 @@ export default function ExportOptions({
   };
   
   // Helper function to render preset preview
-  const renderPresetPreview = (presetConfig: typeof CROP_PRESETS[0]) => {
+  const renderPresetPreview = (presetConfig: CropPresetConfig) => {
     const [width, height] = presetConfig.aspectRatio;
     const aspectRatio = width / height;
     const currentCropArea = allCropAreas[presetConfig.id] || (presetConfig.id === preset ? cropArea : undefined);
@@ -251,16 +266,16 @@ export default function ExportOptions({
         <div className="flex-1">
           <label className="text-sm font-medium text-gray-300 block mb-3">Preset Previews</label>
           <div className="grid grid-cols-3 gap-4">
-            {CROP_PRESETS.map((presetConfig) => renderPresetPreview(presetConfig))}
+            {presets.map((presetConfig) => renderPresetPreview(presetConfig))}
           </div>
         </div>
         
         {/* Right side - Export Options */}
         <div className="w-2/5 space-y-3">
-        {/* Employee Name */}
+        {/* Name Field */}
         <div>
           <label className="text-sm font-medium text-gray-300 mb-1 block">
-            Employee Name
+            {nameLabel}
           </label>
           <div className="flex items-center space-x-2">
             {isEditingName ? (
@@ -279,24 +294,26 @@ export default function ExportOptions({
                 className="flex-1 px-2 py-1.5 text-sm border border-gray-600 rounded-md cursor-text hover:border-gray-500 flex items-center justify-between bg-gray-700"
               >
                 <span className={employeeName ? 'text-gray-200' : 'text-gray-500'}>
-                  {employeeName || 'Enter name'}
+                  {employeeName || (nameLabel === 'Employee Name' ? 'Enter name' : 'Enter project name')}
                 </span>
                 <svg className="w-3 h-3 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                 </svg>
               </div>
             )}
-            <button
-              onClick={() => setAutoDetectName(!autoDetectName)}
-              className={`px-2 py-1.5 text-xs rounded transition-colors ${
-                autoDetectName 
-                  ? 'bg-orange-100 text-orange-700 hover:bg-orange-200' 
-                  : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
-              }`}
-              title="Auto-detect name from filename"
-            >
-              Auto
-            </button>
+            {nameLabel === 'Employee Name' && (
+              <button
+                onClick={() => setAutoDetectName(!autoDetectName)}
+                className={`px-2 py-1.5 text-xs rounded transition-colors ${
+                  autoDetectName 
+                    ? 'bg-orange-100 text-orange-700 hover:bg-orange-200' 
+                    : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                }`}
+                title="Auto-detect name from filename"
+              >
+                Auto
+              </button>
+            )}
           </div>
         </div>
         
@@ -398,17 +415,23 @@ export default function ExportOptions({
           </div>
           
           <div className="flex gap-2 flex-wrap">
+            {availableSizeEntries.map(({ id, name }) => {
+              const displayName = name === 'Website'
+                ? 'Web'
+                : name.replace(/^Website\s+/, 'Web ');
+              return (
               <button
-                onClick={() => handleSizeToggle('headshot')}
+                key={id}
+                onClick={() => handleSizeToggle(id)}
                 className={`
                   px-3 py-1.5 text-sm rounded-md border transition-colors flex items-center gap-2
-                  ${selectedSizes.includes('headshot')
+                  ${selectedSizes.includes(id)
                     ? 'bg-green-600 text-white border-green-600 hover:bg-green-700'
                     : 'bg-gray-700 text-gray-300 border-gray-600 hover:bg-gray-600'
                   }
                 `}
               >
-                {selectedSizes.includes('headshot') ? (
+                {selectedSizes.includes(id) ? (
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <circle cx="12" cy="12" r="10" strokeWidth="2"/>
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4"/>
@@ -419,78 +442,10 @@ export default function ExportOptions({
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 9l-6 6m0-6l6 6"/>
                   </svg>
                 )}
-                Headshot
+                {displayName}
               </button>
-              <button
-                onClick={() => handleSizeToggle('avatar')}
-                className={`
-                  px-3 py-1.5 text-sm rounded-md border transition-colors flex items-center gap-2
-                  ${selectedSizes.includes('avatar')
-                    ? 'bg-green-600 text-white border-green-600 hover:bg-green-700'
-                    : 'bg-gray-700 text-gray-300 border-gray-600 hover:bg-gray-600'
-                  }
-                `}
-              >
-                {selectedSizes.includes('avatar') ? (
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <circle cx="12" cy="12" r="10" strokeWidth="2"/>
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4"/>
-                  </svg>
-                ) : (
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <circle cx="12" cy="12" r="10" strokeWidth="2"/>
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 9l-6 6m0-6l6 6"/>
-                  </svg>
-                )}
-                Avatar
-              </button>
-              <button
-                onClick={() => handleSizeToggle('website')}
-                className={`
-                  px-3 py-1.5 text-sm rounded-md border transition-colors flex items-center gap-2
-                  ${selectedSizes.includes('website')
-                    ? 'bg-green-600 text-white border-green-600 hover:bg-green-700'
-                    : 'bg-gray-700 text-gray-300 border-gray-600 hover:bg-gray-600'
-                  }
-                `}
-              >
-                {selectedSizes.includes('website') ? (
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <circle cx="12" cy="12" r="10" strokeWidth="2"/>
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4"/>
-                  </svg>
-                ) : (
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <circle cx="12" cy="12" r="10" strokeWidth="2"/>
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 9l-6 6m0-6l6 6"/>
-                  </svg>
-                )}
-                Website
-              </button>
-              <button
-                onClick={() => handleSizeToggle('full_body')}
-                className={`
-                  px-3 py-1.5 text-sm rounded-md border transition-colors flex items-center gap-2
-                  ${selectedSizes.includes('full_body')
-                    ? 'bg-green-600 text-white border-green-600 hover:bg-green-700'
-                    : 'bg-gray-700 text-gray-300 border-gray-600 hover:bg-gray-600'
-                  }
-                `}
-              >
-                {selectedSizes.includes('full_body') ? (
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <circle cx="12" cy="12" r="10" strokeWidth="2"/>
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4"/>
-                  </svg>
-                ) : (
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <circle cx="12" cy="12" r="10" strokeWidth="2"/>
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 9l-6 6m0-6l6 6"/>
-                  </svg>
-                )}
-                Full Body
-              </button>
-            </div>
+            );})}
+          </div>
         </div>
         
         {/* Export Progress */}

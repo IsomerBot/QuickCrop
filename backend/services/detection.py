@@ -3,6 +3,7 @@ Computer Vision detection service using MediaPipe
 """
 
 import mediapipe as mp
+import os
 import numpy as np
 from typing import Optional, List, Tuple, Dict, Any
 from dataclasses import dataclass
@@ -10,6 +11,14 @@ import cv2
 from PIL import Image
 
 from core.config import settings
+
+# Optional: MediaPipe Tasks for object detection
+try:
+    from mediapipe.tasks import python as mp_python_tasks
+    from mediapipe.tasks.python import vision as mp_vision_tasks
+    _MP_TASKS_AVAILABLE = True
+except Exception:
+    _MP_TASKS_AVAILABLE = False
 
 
 @dataclass
@@ -67,6 +76,22 @@ class DetectionService:
             'left_hip': 23,
             'right_hip': 24,
         }
+
+        # Initialize Object Detector (if tasks available and model exists)
+        self.object_detector = None
+        if _MP_TASKS_AVAILABLE:
+            model_path = os.environ.get('MP_OBJECT_MODEL', 'models/efficientdet_lite0.tflite')
+            try:
+                if os.path.exists(model_path):
+                    base = mp_python_tasks.BaseOptions(model_asset_path=model_path)
+                    options = mp_vision_tasks.ObjectDetectorOptions(
+                        base_options=base,
+                        score_threshold=0.3,
+                        max_results=5,
+                    )
+                    self.object_detector = mp_vision_tasks.ObjectDetector.create_from_options(options)
+            except Exception:
+                self.object_detector = None
     
     def detect_face(self, image: np.ndarray) -> Optional[FaceDetection]:
         """
@@ -184,6 +209,39 @@ class DetectionService:
             success=success,
             fallback_used=fallback_used
         )
+
+    def detect_objects(self, image: np.ndarray):
+        """Run object detection; returns list of dicts with bbox and score (pixel coordinates)."""
+        if self.object_detector is None:
+            return []
+        # Ensure RGB format
+        if len(image.shape) == 3 and image.shape[2] == 3:
+            rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        else:
+            rgb_image = image
+        mp_image = mp_vision_tasks.Image(image_format=mp_vision_tasks.ImageFormat.SRGB, data=rgb_image)
+        result = self.object_detector.detect(mp_image)
+        detections = []
+        for det in getattr(result, 'detections', []) or []:
+            bbox = det.bounding_box
+            category = det.categories[0] if det.categories else None
+            detections.append({
+                'x': int(bbox.origin_x),
+                'y': int(bbox.origin_y),
+                'width': int(bbox.width),
+                'height': int(bbox.height),
+                'score': float(category.score) if category else 0.0,
+                'category': category.category_name if category else 'object',
+            })
+        return detections
+
+    def best_object_roi(self, image: np.ndarray):
+        """Choose the most relevant object ROI (largest area; tiebreak by score)."""
+        detections = self.detect_objects(image)
+        if not detections:
+            return None
+        detections.sort(key=lambda d: (d['width'] * d['height'], d['score']))
+        return detections[-1]
     
     def get_crop_region(self, 
                        detection: DetectionResult, 

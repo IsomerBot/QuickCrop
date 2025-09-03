@@ -4,7 +4,7 @@ import React, { useState, useCallback, useEffect, useRef } from 'react';
 import Cropper from 'react-easy-crop';
 import type { Point, Area } from 'react-easy-crop';
 import * as Slider from '@radix-ui/react-slider';
-import { UploadedFile, CropPreset, CROP_PRESETS, CropArea } from '@/types';
+import { UploadedFile, CropPreset, CROP_PRESETS, CropArea, CropPresetConfig } from '@/types';
 import { Crop, ZoomIn, ZoomOut } from 'lucide-react';
 
 interface CropEditorProps {
@@ -15,6 +15,7 @@ interface CropEditorProps {
   onCropChange?: (cropArea: CropArea) => void;
   cropArea?: CropArea;  // Initial crop suggestion from AI
   onCroppingStateChange?: (isCropping: boolean) => void;
+  presets?: CropPresetConfig[];
 }
 
 interface CropState {
@@ -42,13 +43,43 @@ export default function CropEditor({
   onCropComplete,
   onCropChange,
   cropArea,
-  onCroppingStateChange
+  onCroppingStateChange,
+  presets = CROP_PRESETS
 }: CropEditorProps) {
   // Find the current preset configuration
-  const currentPresetConfig = CROP_PRESETS.find(p => p.id === preset);
+  const currentPresetConfig = presets.find(p => p.id === preset);
   const aspectRatio = currentPresetConfig 
     ? currentPresetConfig.aspectRatio[0] / currentPresetConfig.aspectRatio[1]
     : 1;
+  
+  // Determine target output size for current preset
+  const outputSize = (() => {
+    if (!currentPresetConfig) return undefined as undefined | [number, number];
+    const match = (currentPresetConfig.outputSizes || []).find(s => s.id === preset as any);
+    const size = match?.size || currentPresetConfig.outputSizes?.[0]?.size;
+    return size as undefined | [number, number];
+  })();
+
+  // Per-preset toggle: allow zooming beyond no-upscaling rule
+  const [allowUpscaleByPreset, setAllowUpscaleByPreset] = useState<Record<string, boolean>>(() => {
+    const m: Record<string, boolean> = {};
+    (CROP_PRESETS as CropPresetConfig[]).forEach(p => { m[p.id] = false; });
+    return m;
+  });
+  const allowUpscale = !!allowUpscaleByPreset[preset];
+
+  // Compute maximum allowed zoom to avoid upscaling beyond source pixels
+  const maxZoom = (() => {
+    const imgW = file.dimensions?.width || 0;
+    const imgH = file.dimensions?.height || 0;
+    if (!imgW || !imgH || !outputSize) return 3; // fallback when unknown
+    const [outW, outH] = outputSize;
+    if (!outW || !outH) return 3;
+    const limit = Math.min(imgW / outW, imgH / outH);
+    // Enforce no-upscaling rule unless upscaling is allowed for this preset
+    const base = Math.max(1, limit);
+    return allowUpscale ? Math.max(base, 10) : base; // allow up to 10x when enabled
+  })();
   
   // State for boundary feedback
   const [showBoundaryFeedback, setShowBoundaryFeedback] = useState(false);
@@ -66,11 +97,20 @@ export default function CropEditor({
   // Store separate crop states for each preset
   const [presetStates, setPresetStates] = useState<PresetCropStates>(() => {
     const states: PresetCropStates = {};
-    CROP_PRESETS.forEach(p => {
+    presets.forEach(p => {
       states[p.id] = { ...initialState };
     });
     return states;
   });
+
+  // Rebuild preset states when available presets set changes
+  useEffect(() => {
+    const states: PresetCropStates = {};
+    presets.forEach(p => { states[p.id] = { ...initialState }; });
+    setPresetStates(states);
+    // Reset history to current preset baseline
+    setHistory({ past: [], present: states[preset] || initialState, future: [] });
+  }, [presets]);
 
   // State for undo/redo functionality (for current preset)
   const [history, setHistory] = useState<HistoryState>(() => {
@@ -233,6 +273,13 @@ export default function CropEditor({
     };
   }, []);
 
+  // Clamp current zoom if preset/image constraints reduce maxZoom
+  useEffect(() => {
+    if (history.present.zoom > maxZoom) {
+      handleZoomChange(maxZoom, true);
+    }
+  }, [maxZoom]);
+
   // Keyboard control state
   const [keyboardStep] = useState({ position: 2, zoom: 0.02 });
   
@@ -378,13 +425,19 @@ export default function CropEditor({
       ...prev,
       [preset]: newState
     }));
+
+    // Proactively push latest known pixel crop to parent for real-time preview
+    if (onCropChange && currentCropPixels) {
+      onCropChange(currentCropPixels);
+    }
   }, [history.present, preset]);
 
   // Handle zoom change  
   const handleZoomChange = useCallback((newZoom: number, immediate = false) => {
+    const clampedZoom = Math.max(1, Math.min(maxZoom, newZoom));
     const newState: CropState = {
       ...history.present,
-      zoom: newZoom
+      zoom: clampedZoom
     };
     
     // Update present state immediately
@@ -401,7 +454,7 @@ export default function CropEditor({
       ...prev,
       [preset]: newState
     }));
-  }, [history.present, preset, saveToHistory]);
+  }, [history.present, preset, saveToHistory, maxZoom]);
 
   // Undo functionality
   const undo = useCallback(() => {
@@ -487,15 +540,15 @@ export default function CropEditor({
       // Handle Tab key for preset cycling
       if (e.key === 'Tab') {
         e.preventDefault();
-        const currentIndex = CROP_PRESETS.findIndex(p => p.id === preset);
+        const currentIndex = presets.findIndex(p => p.id === preset);
         if (e.shiftKey) {
           // Shift+Tab: cycle backwards
-          const newIndex = currentIndex > 0 ? currentIndex - 1 : CROP_PRESETS.length - 1;
-          onPresetChange(CROP_PRESETS[newIndex].id);
+          const newIndex = currentIndex > 0 ? currentIndex - 1 : presets.length - 1;
+          onPresetChange(presets[newIndex].id);
         } else {
           // Tab: cycle forwards
-          const newIndex = currentIndex < CROP_PRESETS.length - 1 ? currentIndex + 1 : 0;
-          onPresetChange(CROP_PRESETS[newIndex].id);
+          const newIndex = currentIndex < presets.length - 1 ? currentIndex + 1 : 0;
+          onPresetChange(presets[newIndex].id);
         }
         return;
       }
@@ -514,7 +567,7 @@ export default function CropEditor({
           if (e.ctrlKey || e.metaKey) {
             // Ctrl/Cmd + Up: Zoom in
             e.preventDefault();
-            newZoom = Math.min(3, zoom + keyboardStep.zoom);
+            newZoom = Math.min(maxZoom, zoom + keyboardStep.zoom);
             handleZoomChange(newZoom, true); // Add to history for keyboard
           } else {
             // Just Up: Move crop up
@@ -606,7 +659,7 @@ export default function CropEditor({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [crop, zoom, keyboardStep, preset, history.present, handleCropChange, handleZoomChange, undo, redo, onPresetChange, saveToHistory, triggerBoundaryFeedback, checkIfAtBoundary, currentCropPixels, file.dimensions]);
+  }, [crop, zoom, keyboardStep, preset, history.present, handleCropChange, handleZoomChange, undo, redo, onPresetChange, saveToHistory, triggerBoundaryFeedback, checkIfAtBoundary, currentCropPixels, file.dimensions, maxZoom]);
 
   return (
     <div className="card">
@@ -656,7 +709,7 @@ export default function CropEditor({
         </label>
         
         <div className="flex gap-2">
-          {CROP_PRESETS.map((presetConfig) => (
+          {presets.map((presetConfig) => (
             <button
               key={presetConfig.id}
               onClick={() => onPresetChange(presetConfig.id)}
@@ -701,6 +754,8 @@ export default function CropEditor({
           crop={crop}
           zoom={zoom}
           rotation={rotation}
+          minZoom={1}
+          maxZoom={maxZoom}
           aspect={aspectRatio}
           onCropChange={handleCropChange}
           onZoomChange={handleZoomChange}
@@ -744,7 +799,7 @@ export default function CropEditor({
               className="relative flex items-center select-none touch-none w-full h-5"
               value={[zoom]}
               onValueChange={(value) => handleZoomChange(value[0], false)}
-              max={3}
+              max={maxZoom}
               min={1}
               step={0.01}
               aria-label="Zoom slider"
@@ -755,7 +810,7 @@ export default function CropEditor({
               <Slider.Thumb className="block w-5 h-5 bg-white border-2 border-orange-500 rounded-full hover:bg-orange-50 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2" />
             </Slider.Root>
             <button
-              onClick={() => handleZoomChange(Math.min(3, zoom + 0.1), true)}
+              onClick={() => handleZoomChange(Math.min(maxZoom, zoom + 0.1), true)}
               className="p-1.5 sm:p-2 bg-gray-700 rounded hover:bg-gray-600 transition-colors text-gray-300"
               aria-label="Zoom in"
             >
@@ -764,6 +819,17 @@ export default function CropEditor({
             <span className="text-xs sm:text-sm text-gray-400 min-w-[45px] sm:min-w-[60px] text-right">
               {Math.round(zoom * 100)}%
             </span>
+          </div>
+          <div className="mt-2 flex items-center gap-2 text-xs text-gray-400">
+            <button
+              type="button"
+              onClick={() => setAllowUpscaleByPreset(prev => ({ ...prev, [preset]: !prev[preset] }))}
+              className={`px-2 py-1 rounded border ${allowUpscale ? 'border-green-500 text-green-400' : 'border-gray-600 text-gray-400'} hover:border-orange-500 hover:text-orange-400 transition-colors`}
+              title="Allow zooming beyond native resolution for this preset"
+            >
+              {allowUpscale ? 'Upscaling: On' : 'Upscaling: Off'}
+            </button>
+            <span>Max {Math.round(maxZoom * 100)}%</span>
           </div>
         </div>
 
