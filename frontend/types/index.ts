@@ -120,11 +120,11 @@ export const PROJECT_PRESETS: CropPresetConfig[] = [
   {
     id: 'proj_description',
     name: 'Project Description',
-    aspectRatio: [3, 2],
+    aspectRatio: [11, 10],
     outputSizes: [
-      { id: 'proj_description', name: 'Project Description', size: [3000, 2000] }
+      { id: 'proj_description', name: 'Project Description', size: [1100, 1000] }
     ],
-    description: 'Horizontal image for use in marketing materials'
+    description: 'Horizontal image for use in powerpoint project descriptions'
   }
 ];
 
