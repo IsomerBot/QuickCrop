@@ -22,7 +22,7 @@ export default function ImageUploader({ onUpload, isProcessing = false }: ImageU
     if (rejectedFiles.length > 0) {
       const rejection = rejectedFiles[0];
       if (rejection.errors[0]?.code === 'file-too-large') {
-        setUploadError('File size must be less than 10MB');
+        setUploadError('File size must be less than 50MB');
       } else if (rejection.errors[0]?.code === 'file-invalid-type') {
         setUploadError('Please upload a valid image file (JPEG, PNG, or WebP)');
       } else {
@@ -86,7 +86,7 @@ export default function ImageUploader({ onUpload, isProcessing = false }: ImageU
       'image/webp': ['.webp']
     },
     maxFiles: 1,
-    maxSize: 10 * 1024 * 1024, // 10MB
+    maxSize: 50 * 1024 * 1024, // 50MB
     disabled: isProcessing || uploadProgress > 0,
     noClick: false,
     noKeyboard: false
@@ -190,7 +190,7 @@ export default function ImageUploader({ onUpload, isProcessing = false }: ImageU
                   Drag & drop an image here, or click to select
                 </p>
                 <p className="text-sm text-gray-400">
-                  Supports: JPEG, PNG, WebP (max 10MB, min 500x500px)
+                  Supports: JPEG, PNG, WebP (max 50MB, min 500x500px)
                 </p>
                 <button
                   type="button"

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import ImageUploader from '@/components/ImageUploader';
 import CropEditor from '@/components/CropEditor';
 import PreviewPanel from '@/components/PreviewPanel';
@@ -19,7 +19,32 @@ export default function Home() {
   const [isCropping, setIsCropping] = useState(false);
   const [suggestionsLoaded, setSuggestionsLoaded] = useState(false);
   const [classifying, setClassifying] = useState(false);
+  const categoryLockRef = useRef(false);
   const presets = getPresets(category || 'employee');
+
+  const applyCategory = (nextCategory: PhotoCategory, options?: { lock?: boolean }) => {
+    const shouldLock = options?.lock ?? false;
+
+    if (shouldLock) {
+      categoryLockRef.current = true;
+    } else if (categoryLockRef.current) {
+      return;
+    }
+
+    const previousCategory = category;
+    setCategory(nextCategory);
+
+    if (previousCategory !== nextCategory) {
+      const firstPreset = getPresets(nextCategory)[0]?.id as CropPreset | undefined;
+      if (firstPreset) {
+        setSelectedPreset(firstPreset);
+      }
+    }
+  };
+
+  const handleCategoryOverride = (nextCategory: PhotoCategory) => {
+    applyCategory(nextCategory, { lock: true });
+  };
 
   const handleFileUpload = async (file: File) => {
     setIsProcessing(true);
@@ -43,6 +68,7 @@ export default function Home() {
     };
     setUploadedFile(uploadedFileData);
     // Reset category until classification completes
+    categoryLockRef.current = false;
     setCategory(null);
     setIsProcessing(false);
     
@@ -55,9 +81,7 @@ export default function Home() {
         try {
           const isEmployee = (response.faces_detected ?? 0) > 0 || response.status === 'ready';
           const cat: PhotoCategory = isEmployee ? 'employee' : 'project';
-          setCategory(cat);
-          const first = getPresets(cat)[0]?.id as CropPreset;
-          if (first) setSelectedPreset(first);
+          applyCategory(cat);
         } finally {
           setClassifying(false);
         }
@@ -75,16 +99,12 @@ export default function Home() {
             if (iw && ih && fw && fh) {
               const pct = (fw * fh) / (iw * ih) * 100;
               const cat: PhotoCategory = pct > 3 ? 'employee' : 'project';
-              setCategory(cat);
-              const firstPreset = getPresets(cat)[0]?.id as CropPreset;
-              if (firstPreset) setSelectedPreset(firstPreset);
+              applyCategory(cat);
             } else {
               // Fallback if missing data
               const isEmployee = (response.faces_detected ?? 0) > 0 || response.status === 'ready';
               const cat: PhotoCategory = isEmployee ? 'employee' : 'project';
-              setCategory(cat);
-              const firstPreset = getPresets(cat)[0]?.id as CropPreset;
-              if (firstPreset) setSelectedPreset(firstPreset);
+              applyCategory(cat);
             }
           } finally {
             setClassifying(false);
@@ -119,9 +139,7 @@ export default function Home() {
           // Continue without suggestions if they fail; fallback to simple face presence
           const isEmployee = (response.faces_detected ?? 0) > 0 || response.status === 'ready';
           const cat: PhotoCategory = isEmployee ? 'employee' : 'project';
-          setCategory(cat);
-          const firstPreset = getPresets(cat)[0]?.id as CropPreset;
-          if (firstPreset) setSelectedPreset(firstPreset);
+          applyCategory(cat);
           setClassifying(false);
         }
       }
@@ -149,7 +167,8 @@ export default function Home() {
       // Map export sizes to backend preset format (employee)
       const sizeToPresetMap: Record<string, string> = {
         'headshot': 'headshot',
-        'avatar': 'headshot',  // Avatar uses headshot crop, just smaller output
+        'avatar': 'headshot',  // Avatar/thumbnail reuse headshot crop, just smaller outputs
+        'thumbnail': 'headshot',
         'website': 'website',
         'full_body': 'full_body',
         'proj_header': 'proj_header',
@@ -166,16 +185,16 @@ export default function Home() {
             const presetName = sizeToPresetMap[size] || size;
             
             try {
-              // For avatar, use headshot's crop area since they should be identical
-              const cropPresetName = (size === 'avatar') ? 'headshot' : presetName;
+              // Reuse headshot crop for avatar/thumbnail outputs
+              const cropPresetName = (size === 'avatar' || size === 'thumbnail') ? 'headshot' : presetName;
               
               const blob = await apiClient.exportImage(uploadId, {
-                preset: size,  // Send the actual size (avatar gets its 300x300 output)
+                preset: size,  // Send the actual size (avatar/thumbnail use dedicated resolutions)
                 format: exportSettings.format,
                 quality: exportSettings.quality,
                 optimize: exportSettings.optimize,
                 auto_optimize: exportSettings.autoOptimize,
-                crop_box: presetCropAreas[cropPresetName] || null  // Use headshot crop for avatar
+                crop_box: presetCropAreas[cropPresetName] || null  // Use headshot crop for avatar/thumbnail
               });
               
               // Trigger download
@@ -263,7 +282,8 @@ export default function Home() {
     // Process each selected preset
     const sizeToPresetMap: Record<string, string> = {
       'headshot': 'headshot',
-      'avatar': 'headshot',
+      'avatar': 'headshot',  // Avatar/thumbnail reuse headshot crop locally too
+      'thumbnail': 'headshot',
       'website': 'website',
       'full_body': 'full_body',
       'proj_header': 'proj_header',
@@ -364,6 +384,8 @@ export default function Home() {
                 setUploadedFile(null);
                 setUploadId(null);
                 setPresetCropAreas({});
+                setCategory(null);
+                categoryLockRef.current = false;
               }}
               className="cursor-pointer transition-transform hover:scale-105"
               aria-label="Return to upload"
@@ -393,11 +415,9 @@ export default function Home() {
             <CategoryModal
               open={!category && !classifying}
               onSelect={(cat) => {
-                setCategory(cat);
-                const first = getPresets(cat)[0]?.id as CropPreset;
-                if (first) setSelectedPreset(first);
+                applyCategory(cat, { lock: true });
               }}
-              onCancel={() => setCategory('employee')}
+              onCancel={() => applyCategory('employee')}
             />
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
               {/* Left Column - Crop Editor */}
@@ -411,6 +431,7 @@ export default function Home() {
                   onCroppingStateChange={handleCroppingStateChange}
                   presets={presets}
                   category={category || 'employee'}
+                  onCategoryChange={category ? handleCategoryOverride : undefined}
                 />
               </div>
 

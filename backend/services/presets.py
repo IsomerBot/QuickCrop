@@ -12,6 +12,7 @@ class PresetType(Enum):
     """Enumeration of available crop preset types."""
     HEADSHOT = "headshot"
     AVATAR = "avatar"
+    THUMBNAIL = "thumbnail"
     WEBSITE = "website"
     FULL_BODY = "full_body"
 
@@ -75,6 +76,19 @@ PRESETS: Dict[PresetType, PresetConfig] = {
         margin_top=0.08,  # Same as headshot
         margin_sides=0.1,  # Same as headshot
         description="Small square crop for profile pictures and avatars"
+    ),
+
+    PresetType.THUMBNAIL: PresetConfig(
+        name="Thumbnail",
+        type=PresetType.THUMBNAIL,
+        output_width=500,
+        output_height=500,
+        aspect_ratio=1.0,
+        crop_ratio=(1, 1),
+        face_position="center",
+        margin_top=0.08,  # Same tuning as headshot/avatar for consistency
+        margin_sides=0.1,
+        description="Medium square crop for internal directories and thumbnails"
     ),
     
     PresetType.WEBSITE: PresetConfig(

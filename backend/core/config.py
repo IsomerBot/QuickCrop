@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     CORS_ORIGINS: List[str] = ["http://localhost:3000", "http://localhost:8000"]
     
     # File Upload Settings
-    MAX_UPLOAD_SIZE: int = 10 * 1024 * 1024  # 10MB
+    MAX_UPLOAD_SIZE: int = 50 * 1024 * 1024  # 50MB
     ALLOWED_EXTENSIONS: List[str] = [".jpg", ".jpeg", ".png", ".webp"]
     
     # Image Processing Settings
@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     OUTPUT_DIR: str = "./outputs"
     
     # MediaPipe Settings
-    MIN_DETECTION_CONFIDENCE: float = 0.5
+    MIN_DETECTION_CONFIDENCE: float = 0.75
     MIN_TRACKING_CONFIDENCE: float = 0.5
     
     # Optimization Settings

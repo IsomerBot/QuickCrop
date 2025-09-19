@@ -173,6 +173,17 @@ class TestImageProcessor(unittest.TestCase):
         img = Image.open(io.BytesIO(result))
         self.assertEqual(img.format, 'PNG')
         self.assertEqual(img.size, (300, 300))  # Avatar dimensions
+
+    def test_process_thumbnail_preset(self):
+        """Test processing the 500x500 thumbnail preset."""
+        result = self.processor.process_preset(
+            PresetType.THUMBNAIL,
+            self.face,
+            format='JPEG'
+        )
+
+        img = Image.open(io.BytesIO(result))
+        self.assertEqual(img.size, (500, 500))
     
     def test_process_with_adjustment(self):
         """Test processing with manual adjustment."""

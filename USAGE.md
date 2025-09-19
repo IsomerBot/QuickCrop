@@ -7,7 +7,7 @@ QuickCrop is designed as a real-time photo cropping tool with live preview. Here
 ### 1. Upload an Image
 - Use the **left panel** to upload an image via drag-and-drop or file selection
 - Supported formats: JPEG, PNG, WebP
-- Maximum file size: 10MB (configurable)
+- Maximum file size: 50MB (configurable)
 
 ### 2. Crop Editor (Left Side)
 The **Crop Editor** on the left side is where you:

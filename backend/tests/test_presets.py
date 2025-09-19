@@ -15,9 +15,10 @@ class TestPresetConfiguration(unittest.TestCase):
     
     def test_preset_types_exist(self):
         """Test that all preset types are defined."""
-        self.assertEqual(len(PresetType), 4)
+        self.assertEqual(len(PresetType), 5)
         self.assertIn(PresetType.HEADSHOT, PresetType)
         self.assertIn(PresetType.AVATAR, PresetType)
+        self.assertIn(PresetType.THUMBNAIL, PresetType)
         self.assertIn(PresetType.WEBSITE, PresetType)
         self.assertIn(PresetType.FULL_BODY, PresetType)
     
@@ -28,7 +29,10 @@ class TestPresetConfiguration(unittest.TestCase):
         
         avatar = get_preset(PresetType.AVATAR)
         self.assertEqual(avatar.dimensions, (300, 300))
-        
+
+        thumbnail = get_preset(PresetType.THUMBNAIL)
+        self.assertEqual(thumbnail.dimensions, (500, 500))
+
         website = get_preset(PresetType.WEBSITE)
         self.assertEqual(website.dimensions, (1600, 2000))
         
@@ -42,7 +46,10 @@ class TestPresetConfiguration(unittest.TestCase):
         
         avatar = get_preset(PresetType.AVATAR)
         self.assertAlmostEqual(avatar.aspect_ratio, 1.0, places=2)
-        
+
+        thumbnail = get_preset(PresetType.THUMBNAIL)
+        self.assertAlmostEqual(thumbnail.aspect_ratio, 1.0, places=2)
+
         website = get_preset(PresetType.WEBSITE)
         self.assertAlmostEqual(website.aspect_ratio, 0.8, places=2)
         
@@ -54,7 +61,11 @@ class TestPresetConfiguration(unittest.TestCase):
         headshot = get_preset(PresetType.HEADSHOT)
         self.assertEqual(headshot.margin_top, 0.08)
         self.assertEqual(headshot.margin_sides, 0.1)
-        
+
+        thumbnail = get_preset(PresetType.THUMBNAIL)
+        self.assertEqual(thumbnail.margin_top, 0.08)
+        self.assertEqual(thumbnail.margin_sides, 0.1)
+
         website = get_preset(PresetType.WEBSITE)
         self.assertEqual(website.margin_top, 0.05)
         self.assertEqual(website.margin_sides, 0.08)
@@ -67,7 +78,10 @@ class TestPresetConfiguration(unittest.TestCase):
         """Test face position settings."""
         headshot = get_preset(PresetType.HEADSHOT)
         self.assertEqual(headshot.face_position, "center")
-        
+
+        thumbnail = get_preset(PresetType.THUMBNAIL)
+        self.assertEqual(thumbnail.face_position, "center")
+
         website = get_preset(PresetType.WEBSITE)
         self.assertEqual(website.face_position, "upper")
         
@@ -100,9 +114,10 @@ class TestPresetConfiguration(unittest.TestCase):
     def test_get_all_presets(self):
         """Test getting all presets."""
         all_presets = get_all_presets()
-        self.assertEqual(len(all_presets), 4)
+        self.assertEqual(len(all_presets), 5)
         self.assertIn(PresetType.HEADSHOT, all_presets)
         self.assertIn(PresetType.AVATAR, all_presets)
+        self.assertIn(PresetType.THUMBNAIL, all_presets)
         self.assertIn(PresetType.WEBSITE, all_presets)
         self.assertIn(PresetType.FULL_BODY, all_presets)
     
@@ -124,6 +139,10 @@ class TestPresetConfiguration(unittest.TestCase):
         self.assertEqual(
             get_preset_by_dimensions(300, 300),
             PresetType.AVATAR
+        )
+        self.assertEqual(
+            get_preset_by_dimensions(500, 500),
+            PresetType.THUMBNAIL
         )
         self.assertEqual(
             get_preset_by_dimensions(1600, 2000),

@@ -297,6 +297,7 @@ class CropCalculatorFactory:
     _calculators = {
         PresetType.HEADSHOT: HeadshotCropCalculator,
         PresetType.AVATAR: HeadshotCropCalculator,  # Same as headshot
+        PresetType.THUMBNAIL: HeadshotCropCalculator,  # Same framing as headshot
         PresetType.WEBSITE: WebsiteCropCalculator,
         PresetType.FULL_BODY: FullBodyCropCalculator
     }
