@@ -11,6 +11,7 @@ class CropPreset(str, Enum):
     """Available crop presets"""
     HEADSHOT = "headshot"  # 2000x2000 square
     AVATAR = "avatar"  # 300x300 square
+    THUMBNAIL = "thumbnail"  # 500x500 square
     WEBSITE = "website"  # 1600x2000 portrait (4:5)
     FULL_BODY = "full_body"  # 3400x4000 portrait (17:20)
 
@@ -75,6 +76,11 @@ PRESET_CONFIGS = {
     CropPreset.AVATAR: CropSettings(
         aspect_ratio=(1, 1),
         padding_percent=0.15,
+        focus_area="face"
+    ),
+    CropPreset.THUMBNAIL: CropSettings(
+        aspect_ratio=(1, 1),
+        padding_percent=0.2,
         focus_area="face"
     ),
     CropPreset.WEBSITE: CropSettings(

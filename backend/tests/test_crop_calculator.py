@@ -182,6 +182,9 @@ class TestCropCalculatorFactory(unittest.TestCase):
         
         avatar_calc = CropCalculatorFactory.create(PresetType.AVATAR)
         self.assertIsInstance(avatar_calc, HeadshotCropCalculator)
+
+        thumbnail_calc = CropCalculatorFactory.create(PresetType.THUMBNAIL)
+        self.assertIsInstance(thumbnail_calc, HeadshotCropCalculator)
         
         website_calc = CropCalculatorFactory.create(PresetType.WEBSITE)
         self.assertIsInstance(website_calc, WebsiteCropCalculator)
@@ -202,20 +205,26 @@ class TestCropCalculationFunctions(unittest.TestCase):
         """Test single crop calculation."""
         face = FaceBox(x=400, y=300, width=200, height=250)
         crop = calculate_crop(PresetType.HEADSHOT, face, 2000, 2000)
-        
+
         self.assertIsInstance(crop, CropBox)
         self.assertEqual(crop.preset_type, PresetType.HEADSHOT)
         self.assertEqual(crop.width, crop.height)  # Square for headshot
+
+        thumb_crop = calculate_crop(PresetType.THUMBNAIL, face, 2000, 2000)
+        self.assertIsInstance(thumb_crop, CropBox)
+        self.assertEqual(thumb_crop.preset_type, PresetType.THUMBNAIL)
+        self.assertEqual(thumb_crop.width, thumb_crop.height)
     
     def test_calculate_all_crops(self):
         """Test calculating all crop types at once."""
         face = FaceBox(x=400, y=300, width=200, height=250)
         crops = calculate_all_crops(face, 3000, 4000)
-        
+
         # Should have all preset types
         self.assertEqual(len(crops), len(PresetType))
         self.assertIn(PresetType.HEADSHOT, crops)
         self.assertIn(PresetType.AVATAR, crops)
+        self.assertIn(PresetType.THUMBNAIL, crops)
         self.assertIn(PresetType.WEBSITE, crops)
         self.assertIn(PresetType.FULL_BODY, crops)
         

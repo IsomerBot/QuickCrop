@@ -72,7 +72,7 @@ describe('ImageUploader', () => {
     dropHandler([], rejectedFiles);
     
     await waitFor(() => {
-      expect(screen.getByText('File size must be less than 10MB')).toBeInTheDocument();
+      expect(screen.getByText('File size must be less than 50MB')).toBeInTheDocument();
     });
   });
 

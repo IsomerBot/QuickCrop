@@ -17,6 +17,7 @@ interface CropEditorProps {
   onCroppingStateChange?: (isCropping: boolean) => void;
   presets?: CropPresetConfig[];
   category?: PhotoCategory; // 'employee' | 'project'
+  onCategoryChange?: (category: PhotoCategory) => void;
 }
 
 interface CropState {
@@ -46,10 +47,16 @@ export default function CropEditor({
   cropArea,
   onCroppingStateChange,
   presets = CROP_PRESETS,
-  category
+  category,
+  onCategoryChange
 }: CropEditorProps) {
   // Find the current preset configuration
   const currentPresetConfig = presets.find(p => p.id === preset);
+  const resolvedCategory: PhotoCategory = category || 'employee';
+  const categoryOptions: Array<{ value: PhotoCategory; label: string }> = [
+    { value: 'employee', label: 'Team' },
+    { value: 'project', label: 'Project' }
+  ];
   const aspectRatio = currentPresetConfig 
     ? currentPresetConfig.aspectRatio[0] / currentPresetConfig.aspectRatio[1]
     : 1;
@@ -666,11 +673,44 @@ export default function CropEditor({
 
   return (
     <div className="card">
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl font-semibold flex items-center gap-2">
-          <Crop className="w-5 h-5" />
-          Crop Settings
-        </h2>
+      <div className="flex justify-between items-center mb-4 gap-3">
+        <div className="flex items-center gap-3">
+          <h2 className="text-xl font-semibold flex items-center gap-2">
+            <Crop className="w-5 h-5" />
+            Crop Settings
+          </h2>
+          {onCategoryChange && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs uppercase tracking-wide text-gray-400 hidden sm:inline">Mode</span>
+              <div className="flex bg-gray-800 border border-gray-700 rounded-full p-0.5" role="group" aria-label="Photo category">
+                {categoryOptions.map(option => {
+                  const isActive = resolvedCategory === option.value;
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => {
+                        if (!isActive) {
+                          onCategoryChange(option.value);
+                        }
+                      }}
+                      className={`px-2 py-1 text-xs font-medium rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 focus:ring-offset-gray-900 ${
+                        isActive
+                          ? 'bg-orange-500 text-white shadow-sm'
+                          : 'text-gray-300 hover:text-white'
+                      }`}
+                      aria-pressed={isActive}
+                      aria-label={`Switch to ${option.label.toLowerCase()} mode`}
+                      title={`Use ${option.label} presets`}
+                    >
+                      {option.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
         <div className="flex gap-1">
           <button
             onClick={undo}

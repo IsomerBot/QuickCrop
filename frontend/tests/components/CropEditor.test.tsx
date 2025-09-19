@@ -171,6 +171,25 @@ describe('CropEditor', () => {
     expect(screen.getByText('Redo →')).toBeInTheDocument();
   });
 
+  it('renders category toggle when override handler provided', () => {
+    const onCategoryChange = jest.fn();
+
+    render(
+      <CropEditor
+        file={mockFile}
+        preset="square"
+        onPresetChange={mockOnPresetChange}
+        category="employee"
+        onCategoryChange={onCategoryChange}
+      />
+    );
+
+    const projectButton = screen.getByRole('button', { name: /switch to project mode/i });
+    fireEvent.click(projectButton);
+
+    expect(onCategoryChange).toHaveBeenCalledWith('project');
+  });
+
   it('displays keyboard shortcuts help', () => {
     render(
       <CropEditor

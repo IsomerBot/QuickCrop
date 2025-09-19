@@ -78,6 +78,7 @@ async def generate_preview(
     preset_map = {
         'headshot': PresetType.HEADSHOT,
         'avatar': PresetType.AVATAR,
+        'thumbnail': PresetType.THUMBNAIL,
         'website': PresetType.WEBSITE,
         'full_body': PresetType.FULL_BODY
     }
@@ -161,6 +162,7 @@ async def export_image(
         preset_map = {
             'headshot': PresetType.HEADSHOT,
             'avatar': PresetType.AVATAR,
+            'thumbnail': PresetType.THUMBNAIL,
             'website': PresetType.WEBSITE,
             'full_body': PresetType.FULL_BODY
         }
@@ -229,6 +231,7 @@ async def export_image(
         preset_map = {
             'headshot': PresetType.HEADSHOT,
             'avatar': PresetType.AVATAR,
+            'thumbnail': PresetType.THUMBNAIL,
             'website': PresetType.WEBSITE,
             'full_body': PresetType.FULL_BODY
         }
@@ -348,6 +351,7 @@ async def validate_adjustments(
     preset_map = {
         'headshot': PresetType.HEADSHOT,
         'avatar': PresetType.AVATAR,
+        'thumbnail': PresetType.THUMBNAIL,
         'website': PresetType.WEBSITE,
         'full_body': PresetType.FULL_BODY
     }

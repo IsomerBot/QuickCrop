@@ -12,6 +12,7 @@ export type PresetId =
 export type ExportSize =
   | 'headshot'
   | 'avatar'
+  | 'thumbnail'
   | 'website'
   | 'full_body'
   | 'proj_banner'
@@ -73,7 +74,8 @@ export const EMPLOYEE_PRESETS: CropPresetConfig[] = [
     aspectRatio: [1, 1],
     outputSizes: [
       { id: 'headshot', name: 'Headshot', size: [2000, 2000] },
-      { id: 'avatar', name: 'Avatar', size: [300, 300] }
+      { id: 'avatar', name: 'Avatar', size: [300, 300] },
+      { id: 'thumbnail', name: 'Thumbnail', size: [500, 500] }
     ],
     description: 'Square crop for professional headshots and avatars'
   },
