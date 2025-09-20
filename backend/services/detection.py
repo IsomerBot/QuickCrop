@@ -127,17 +127,12 @@ def extract_keypoints(detection: Any) -> Dict[str, Tuple[float, float]]:
     return keypoints
 
 
-def find_best_overlapping_pair(
+def iter_overlapping_pairs(
     primary: Iterable[Any],
     secondary: Iterable[Any],
     min_iou: float
-) -> Optional[Tuple[Any, Any]]:
-    """
-    Return the detection pair (primary, secondary) with IoU above threshold and best average score.
-    """
-    best_pair: Optional[Tuple[Any, Any]] = None
-    best_score = 0.0
-
+) -> Iterable[Tuple[Any, Any, float]]:
+    """Yield detection pairs whose IoU meets the threshold along with average score."""
     for det_primary in primary:
         primary_bbox = relative_bbox_tuple(det_primary)
         primary_score = detection_score(det_primary)
@@ -150,11 +145,28 @@ def find_best_overlapping_pair(
                 continue
 
             avg_score = (primary_score + detection_score(det_secondary)) / 2.0
-            if avg_score > best_score:
-                best_score = avg_score
-                best_pair = (det_primary, det_secondary)
+            yield det_primary, det_secondary, avg_score
 
-    return best_pair
+
+def find_unique_best_pair(
+    primary: Iterable[Any],
+    secondary: Iterable[Any],
+    min_iou: float
+) -> Optional[Tuple[Any, Any]]:
+    """Return the highest scoring pair only when exactly one overlapping match exists."""
+    best_pair: Optional[Tuple[Any, Any]] = None
+    best_score = float('-inf')
+    matches = 0
+
+    for det_primary, det_secondary, avg_score in iter_overlapping_pairs(primary, secondary, min_iou):
+        matches += 1
+        if avg_score > best_score:
+            best_score = avg_score
+            best_pair = (det_primary, det_secondary)
+
+    if matches == 1:
+        return best_pair
+    return None
 
 
 class DetectionService:
@@ -224,7 +236,7 @@ class DetectionService:
         if not short_results.detections or not full_results.detections:
             return None
 
-        match = find_best_overlapping_pair(
+        match = find_unique_best_pair(
             short_results.detections,
             full_results.detections,
             min_iou=settings.FACE_MATCH_IOU_THRESHOLD

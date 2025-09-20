@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 from services.detection import (
     compute_iou,
-    find_best_overlapping_pair,
+    find_unique_best_pair,
     relative_bbox_tuple,
     detection_score,
 )
@@ -36,13 +36,13 @@ class TestDetectionHelpers(unittest.TestCase):
         box_b = (0.5, 0.5, 0.2, 0.2)
         self.assertEqual(compute_iou(box_a, box_b), 0.0)
 
-    def test_find_best_overlapping_pair_requires_threshold(self):
+    def test_find_unique_best_pair_requires_threshold(self):
         primary = [make_detection(0.1, 0.1, 0.2, 0.2, 0.9)]
         secondary = [make_detection(0.5, 0.5, 0.2, 0.2, 0.8)]
-        result = find_best_overlapping_pair(primary, secondary, min_iou=0.3)
+        result = find_unique_best_pair(primary, secondary, min_iou=0.3)
         self.assertIsNone(result)
 
-    def test_find_best_overlapping_pair_selects_highest_score(self):
+    def test_find_unique_best_pair_selects_highest_score(self):
         primary = [
             make_detection(0.1, 0.1, 0.2, 0.2, 0.6),
             make_detection(0.2, 0.2, 0.3, 0.3, 0.9)
@@ -51,11 +51,23 @@ class TestDetectionHelpers(unittest.TestCase):
             make_detection(0.21, 0.21, 0.28, 0.28, 0.85),
             make_detection(0.6, 0.6, 0.2, 0.2, 0.95)
         ]
-        match = find_best_overlapping_pair(primary, secondary, min_iou=0.3)
+        match = find_unique_best_pair(primary, secondary, min_iou=0.3)
         self.assertIsNotNone(match)
         first, second = match
         self.assertAlmostEqual(detection_score(first), 0.9)
         self.assertAlmostEqual(detection_score(second), 0.85)
+
+    def test_find_unique_best_pair_rejects_multiple_matches(self):
+        primary = [
+            make_detection(0.1, 0.1, 0.2, 0.2, 0.9),
+            make_detection(0.45, 0.1, 0.2, 0.2, 0.8)
+        ]
+        secondary = [
+            make_detection(0.11, 0.11, 0.2, 0.2, 0.85),
+            make_detection(0.46, 0.11, 0.2, 0.2, 0.82)
+        ]
+        match = find_unique_best_pair(primary, secondary, min_iou=0.3)
+        self.assertIsNone(match)
 
     def test_relative_bbox_tuple(self):
         detection = make_detection(0.05, 0.05, 0.4, 0.4, 0.7)
