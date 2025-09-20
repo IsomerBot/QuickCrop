@@ -6,7 +6,6 @@ import CropEditor from '@/components/CropEditor';
 import PreviewPanel from '@/components/PreviewPanel';
 import ExportOptions from '@/components/ExportOptions';
 import { UploadedFile, CropPreset, CropArea, CROP_PRESETS, PhotoCategory, getPresets } from '@/types';
-import CategoryModal from '@/components/CategoryModal';
 import { apiClient } from '@/lib/api';
 
 export default function Home() {
@@ -20,7 +19,8 @@ export default function Home() {
   const [suggestionsLoaded, setSuggestionsLoaded] = useState(false);
   const [classifying, setClassifying] = useState(false);
   const categoryLockRef = useRef(false);
-  const presets = getPresets(category || 'employee');
+  const activeCategory = (category ?? 'employee') as PhotoCategory;
+  const presets = getPresets(activeCategory);
 
   const applyCategory = (nextCategory: PhotoCategory, options?: { lock?: boolean }) => {
     const shouldLock = options?.lock ?? false;
@@ -373,6 +373,8 @@ export default function Home() {
     setIsCropping(isCropping);
   };
 
+  const showWorkspace = Boolean(uploadedFile && category);
+
   return (
     <main className="min-h-screen p-8 bg-gradient-to-br from-gray-900 via-gray-800 to-black">
       <div className="max-w-7xl mx-auto">
@@ -409,16 +411,8 @@ export default function Home() {
               <ImageUploader onUpload={handleFileUpload} isProcessing={isProcessing} />
             </div>
           </div>
-        ) : (
+        ) : showWorkspace ? (
           <>
-            {/* Category selection modal */}
-            <CategoryModal
-              open={!category && !classifying}
-              onSelect={(cat) => {
-                applyCategory(cat, { lock: true });
-              }}
-              onCancel={() => applyCategory('employee')}
-            />
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
               {/* Left Column - Crop Editor */}
               <div className="space-y-6">
@@ -430,15 +424,15 @@ export default function Home() {
                   cropArea={suggestionsLoaded ? presetCropAreas[selectedPreset] : undefined}
                   onCroppingStateChange={handleCroppingStateChange}
                   presets={presets}
-                  category={category || 'employee'}
-                  onCategoryChange={category ? handleCategoryOverride : undefined}
+                  category={activeCategory}
+                  onCategoryChange={handleCategoryOverride}
                 />
               </div>
 
               {/* Right Column - Preview Panel */}
               <div className="space-y-6">
                 <PreviewPanel
-                  key={category || 'none'}
+                  key={category}
                   file={uploadedFile}
                   preset={selectedPreset}
                   cropArea={presetCropAreas[selectedPreset]}
@@ -446,9 +440,9 @@ export default function Home() {
                   onPresetSelect={handlePresetChange}
                   allCropAreas={presetCropAreas}
                   presets={presets}
-                  enableComparison={category !== 'project'}
-                  defaultShowComparison={category !== 'project'}
-                  category={category || 'employee'}
+                  enableComparison={activeCategory !== 'project'}
+                  defaultShowComparison={activeCategory !== 'project'}
+                  category={activeCategory}
                 />
               </div>
             </div>
@@ -464,10 +458,49 @@ export default function Home() {
                 isProcessing={isProcessing}
                 onPresetSelect={handlePresetChange}
                 presets={presets}
-                nameLabel={category === 'project' ? 'Project Name' : 'Employee Name'}
+                nameLabel={activeCategory === 'project' ? 'Project Name' : 'Employee Name'}
               />
             </div>
           </>
+        ) : (
+          <div className="flex flex-col items-center gap-6">
+            <div className="w-full max-w-2xl">
+              <ImageUploader onUpload={handleFileUpload} isProcessing={isProcessing} />
+            </div>
+            <div className="w-full max-w-xl bg-gray-900/70 border border-gray-700 rounded-xl p-6 text-center">
+              <div className="flex items-center justify-center gap-3 mb-2">
+                {classifying ? (
+                  <div className="h-5 w-5 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" aria-hidden />
+                ) : (
+                  <svg className="h-6 w-6 text-orange-400" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6l4 2" />
+                  </svg>
+                )}
+                <h2 className="text-lg font-semibold text-white">Analyzing photo</h2>
+              </div>
+              <p className="text-sm text-gray-300">
+                {classifying
+                  ? 'Identifying the best workflow for this photo…'
+                  : 'We could not determine the workflow automatically. Please choose how you want to crop.'}
+              </p>
+              {!classifying && (
+                <div className="mt-4 flex flex-wrap justify-center gap-2">
+                  <button
+                    className="px-4 py-2 text-sm font-medium rounded-lg bg-orange-500 text-white hover:bg-orange-600 focus:outline-none focus:ring-2 focus:ring-orange-400"
+                    onClick={() => applyCategory('employee', { lock: true })}
+                  >
+                    Use Team Presets
+                  </button>
+                  <button
+                    className="px-4 py-2 text-sm font-medium rounded-lg bg-gray-800 text-gray-200 hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-400"
+                    onClick={() => applyCategory('project', { lock: true })}
+                  >
+                    Use Project Presets
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
         )}
 
       </div>
