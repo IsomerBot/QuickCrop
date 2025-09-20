@@ -673,13 +673,15 @@ export default function CropEditor({
 
   return (
     <div className="card">
-      <div className="flex justify-between items-center mb-4 gap-3">
-        <div className="flex items-center gap-3">
+      <div className="flex items-center mb-4 gap-3">
+        <div className="flex items-center gap-2 flex-shrink-0">
           <h2 className="text-xl font-semibold flex items-center gap-2">
             <Crop className="w-5 h-5" />
             Crop Settings
           </h2>
-          {onCategoryChange && (
+        </div>
+        {onCategoryChange && (
+          <div className="flex-1 flex justify-center">
             <div className="flex items-center gap-2">
               <span className="text-xs uppercase tracking-wide text-gray-400 hidden sm:inline">Mode</span>
               <div className="flex bg-gray-800 border border-gray-700 rounded-full p-0.5" role="group" aria-label="Photo category">
@@ -709,9 +711,9 @@ export default function CropEditor({
                 })}
               </div>
             </div>
-          )}
-        </div>
-        <div className="flex gap-1">
+          </div>
+        )}
+        <div className="flex gap-1 ml-auto">
           <button
             onClick={undo}
             disabled={history.past.length === 0}
@@ -766,7 +768,7 @@ export default function CropEditor({
             >
               {presetConfig.name}
               {presetConfig.id === 'headshot' && (
-                <span className="ml-1 text-xs align-super">2</span>
+                <span className="ml-1 text-xs align-super">3</span>
               )}
             </button>
           ))}
