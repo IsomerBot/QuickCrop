@@ -5,7 +5,7 @@ Computer Vision detection service using MediaPipe
 import mediapipe as mp
 import os
 import numpy as np
-from typing import Optional, List, Tuple, Dict, Any
+from typing import Optional, List, Tuple, Dict, Any, Iterable
 from dataclasses import dataclass
 import cv2
 from PIL import Image
@@ -49,14 +49,127 @@ class DetectionResult:
     fallback_used: bool = False
 
 
+def detection_score(detection: Any) -> float:
+    """Return the confidence score for a MediaPipe detection."""
+    score = getattr(detection, 'score', None)
+    if isinstance(score, (list, tuple)) and score:
+        return float(score[0])
+    if isinstance(score, (np.ndarray,)) and score.size:
+        return float(score[0])
+    try:
+        return float(score)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def relative_bbox_tuple(detection: Any) -> Tuple[float, float, float, float]:
+    """Extract (xmin, ymin, width, height) from a detection's relative bounding box."""
+    bbox = detection.location_data.relative_bounding_box
+    return (bbox.xmin, bbox.ymin, bbox.width, bbox.height)
+
+
+def average_bounding_boxes(*boxes: Tuple[float, float, float, float]) -> Tuple[float, float, float, float]:
+    """Average multiple bounding boxes (element-wise)."""
+    if not boxes:
+        raise ValueError("At least one bounding box required")
+    sums = [0.0, 0.0, 0.0, 0.0]
+    for box in boxes:
+        for idx, value in enumerate(box):
+            sums[idx] += value
+    count = float(len(boxes))
+    return tuple(value / count for value in sums)
+
+
+def compute_iou(box_a: Tuple[float, float, float, float],
+                box_b: Tuple[float, float, float, float]) -> float:
+    """Compute IoU between two relative bounding boxes."""
+    ax, ay, aw, ah = box_a
+    bx, by, bw, bh = box_b
+
+    a_x2, a_y2 = ax + aw, ay + ah
+    b_x2, b_y2 = bx + bw, by + bh
+
+    inter_x1 = max(ax, bx)
+    inter_y1 = max(ay, by)
+    inter_x2 = min(a_x2, b_x2)
+    inter_y2 = min(a_y2, b_y2)
+
+    inter_w = max(0.0, inter_x2 - inter_x1)
+    inter_h = max(0.0, inter_y2 - inter_y1)
+    inter_area = inter_w * inter_h
+
+    area_a = max(0.0, aw) * max(0.0, ah)
+    area_b = max(0.0, bw) * max(0.0, bh)
+
+    denom = area_a + area_b - inter_area
+    if denom <= 0.0:
+        return 0.0
+    return inter_area / denom
+
+
+def extract_keypoints(detection: Any) -> Dict[str, Tuple[float, float]]:
+    """Pull eye/nose keypoints from a MediaPipe detection, if available."""
+    location_data = getattr(detection, 'location_data', None)
+    if not location_data:
+        return {}
+    relative_keypoints = getattr(location_data, 'relative_keypoints', None)
+    if not relative_keypoints:
+        return {}
+
+    keypoints: Dict[str, Tuple[float, float]] = {}
+    for idx, kp in enumerate(relative_keypoints):
+        if idx == 0:
+            keypoints['left_eye'] = (kp.x, kp.y)
+        elif idx == 1:
+            keypoints['right_eye'] = (kp.x, kp.y)
+        elif idx == 2:
+            keypoints['nose'] = (kp.x, kp.y)
+    return keypoints
+
+
+def find_best_overlapping_pair(
+    primary: Iterable[Any],
+    secondary: Iterable[Any],
+    min_iou: float
+) -> Optional[Tuple[Any, Any]]:
+    """
+    Return the detection pair (primary, secondary) with IoU above threshold and best average score.
+    """
+    best_pair: Optional[Tuple[Any, Any]] = None
+    best_score = 0.0
+
+    for det_primary in primary:
+        primary_bbox = relative_bbox_tuple(det_primary)
+        primary_score = detection_score(det_primary)
+
+        for det_secondary in secondary:
+            secondary_bbox = relative_bbox_tuple(det_secondary)
+            iou = compute_iou(primary_bbox, secondary_bbox)
+
+            if iou < min_iou:
+                continue
+
+            avg_score = (primary_score + detection_score(det_secondary)) / 2.0
+            if avg_score > best_score:
+                best_score = avg_score
+                best_pair = (det_primary, det_secondary)
+
+    return best_pair
+
+
 class DetectionService:
     """Service for face and pose detection using MediaPipe"""
     
     def __init__(self):
-        # Initialize MediaPipe Face Detection
+        # Initialize MediaPipe Face Detection (short and full range)
         self.mp_face_detection = mp.solutions.face_detection
-        self.face_detection = self.mp_face_detection.FaceDetection(
-            min_detection_confidence=settings.MIN_DETECTION_CONFIDENCE
+        self.face_detection_short = self.mp_face_detection.FaceDetection(
+            min_detection_confidence=settings.MIN_DETECTION_CONFIDENCE,
+            model_selection=0
+        )
+        self.face_detection_full = self.mp_face_detection.FaceDetection(
+            min_detection_confidence=settings.MIN_DETECTION_CONFIDENCE,
+            model_selection=1
         )
         
         # Initialize MediaPipe Pose Detection
@@ -104,33 +217,37 @@ class DetectionService:
         else:
             rgb_image = image
         
-        # Process with MediaPipe
-        results = self.face_detection.process(rgb_image)
-        
-        if not results.detections:
+        # Process with MediaPipe short- and full-range models
+        short_results = self.face_detection_short.process(rgb_image)
+        full_results = self.face_detection_full.process(rgb_image)
+
+        if not short_results.detections or not full_results.detections:
             return None
-        
-        # Get the detection with highest confidence
-        best_detection = max(results.detections, 
-                           key=lambda d: d.score[0])
-        
-        # Extract bounding box
-        bbox = best_detection.location_data.relative_bounding_box
-        confidence = best_detection.score[0]
-        
-        # Extract keypoints if available
-        keypoints = {}
-        if best_detection.location_data.relative_keypoints:
-            for idx, kp in enumerate(best_detection.location_data.relative_keypoints):
-                if idx == 0:  # Left eye
-                    keypoints['left_eye'] = (kp.x, kp.y)
-                elif idx == 1:  # Right eye
-                    keypoints['right_eye'] = (kp.x, kp.y)
-                elif idx == 2:  # Nose tip
-                    keypoints['nose'] = (kp.x, kp.y)
-        
+
+        match = find_best_overlapping_pair(
+            short_results.detections,
+            full_results.detections,
+            min_iou=settings.FACE_MATCH_IOU_THRESHOLD
+        )
+
+        if not match:
+            return None
+
+        short_det, full_det = match
+        short_bbox = relative_bbox_tuple(short_det)
+        full_bbox = relative_bbox_tuple(full_det)
+
+        combined_bbox = average_bounding_boxes(short_bbox, full_bbox)
+
+        short_score = detection_score(short_det)
+        full_score = detection_score(full_det)
+        confidence = min(short_score, full_score)
+
+        best_det = short_det if short_score >= full_score else full_det
+        keypoints = extract_keypoints(best_det)
+
         return FaceDetection(
-            bbox=(bbox.xmin, bbox.ymin, bbox.width, bbox.height),
+            bbox=combined_bbox,
             confidence=confidence,
             keypoints=keypoints if keypoints else None
         )
@@ -312,8 +429,9 @@ class DetectionService:
     
     def __del__(self):
         """Cleanup MediaPipe resources"""
-        if hasattr(self, 'face_detection'):
-            self.face_detection.close()
+        for attr in ('face_detection_short', 'face_detection_full'):
+            if hasattr(self, attr):
+                getattr(self, attr).close()
         if hasattr(self, 'pose_detection'):
             self.pose_detection.close()
 
