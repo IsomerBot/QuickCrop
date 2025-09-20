@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     # MediaPipe Settings
     MIN_DETECTION_CONFIDENCE: float = 0.75
     MIN_TRACKING_CONFIDENCE: float = 0.5
+    FACE_MATCH_IOU_THRESHOLD: float = 0.35
     
     # Optimization Settings
     USE_PNG_OPTIMIZATION: bool = True
